@@ -174,6 +174,20 @@ main.wrap{padding-block:0 64px}
 .chip i{width:6px;height:6px;border-radius:50%;background:var(--ink-3)}
 .chip.on i{background:var(--ok)}
 .chip.warn i{background:var(--warn)}
+button.chip{cursor:pointer;font:inherit;font-size:12px}
+button.chip:hover{border-color:var(--ink-3)}
+.pair-back{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:30;display:grid;place-items:center;padding:16px}
+.pair{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:22px 22px 18px}
+.pair h2{font-family:var(--f-serif);font-size:19px;margin:0 0 8px}
+.pair p{color:var(--ink-2);line-height:1.75;margin:0 0 12px;font-size:13.5px}
+.pair .qr{display:grid;place-items:center;background:#fff;border-radius:8px;padding:12px;width:204px;margin:6px auto 12px}
+.pair .code{font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:.06em;background:var(--accent-soft);border-radius:6px;padding:8px 10px;word-break:break-all;text-align:center;margin-bottom:10px;user-select:all}
+.pair .row{display:flex;gap:8px;flex-wrap:wrap}
+.pair .row .btn{flex:1;min-width:120px}
+.pair input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;background:transparent;padding:8px 10px;font-family:ui-monospace,Menlo,monospace}
+.pair hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+.pair .x{float:right;border:0;background:none;color:var(--ink-3);font-size:20px;line-height:1;padding:2px 4px}
+.pair .danger{color:var(--warn)}
 .sync-bar{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:8px 16px;background:var(--accent-soft);font-size:13px;border-bottom:1px solid var(--line)}
 .sync-bar .btn{padding:4px 12px;font-size:13px}
 .toc-back{display:none}
@@ -253,6 +267,7 @@ main.wrap{padding-block:0 64px}
     </div>
     <div class="head-actions">
       <span class="chip" id="syncChip"><i></i><span>仅保存在本机</span></span>
+      <button class="chip" id="pairChip" hidden><i></i><span>手机电脑同步</span></button>
       <button class="btn primary" id="importBtn">导入书籍</button>
       <input type="file" id="fileIn" accept=".txt,.epub,text/plain,application/epub+zip" multiple hidden>
     </div>
@@ -319,6 +334,7 @@ main.wrap{padding-block:0 64px}
 </div>
 <button class="btn primary here" id="hereBtn" hidden>从这里读</button>
 <div id="toast" role="status" aria-live="polite"></div>
+<div class="pair-back" id="pairBack" hidden><div class="pair" role="dialog" aria-modal="true" aria-labelledby="pairTitle" id="pairBox"></div></div>
 
 <script>
 (() => {
@@ -602,18 +618,20 @@ const DEVICE_NAME = TOUCH ? '手机' : '电脑';
 let DEVICE_ID = 'd' + Math.random().toString(36).slice(2, 10);
 try { DEVICE_ID = localStorage.getItem('jingting-device') || DEVICE_ID; localStorage.setItem('jingting-device', DEVICE_ID); } catch (e) {}
 const NOTE_LOCAL = '书只保存在这台设备的这个浏览器里，不会上传到任何地方；换浏览器或清除网站数据后需要重新导入。支持 TXT（自动识别 UTF-8 / GBK 编码，按「第X章」等标题切分章节）和未加密的 EPUB。';
+const NOTE_SYNC_SITE = '这台设备已开启同步：书和阅读进度保存在你自己的同步空间里，只有拿到配对码的设备能看到。在手机上扫码配对后，书架和进度就会自动互通。支持 TXT（自动识别 UTF-8 / GBK 编码）和未加密的 EPUB。';
 const NOTE_SYNC = '书和阅读进度保存在你的 Claude 账号里，只有你自己能看到。在手机和电脑上登录同一个 Claude 账号、打开这个页面，书架和进度就会自动同步。支持 TXT（自动识别 UTF-8 / GBK 编码）和未加密的 EPUB，单本最大 20MB。';
 function setChip(state) {
   const map = { connecting: ['', '正在连接同步…'], on: ['on', '已同步 · 手机电脑进度互通'], local: ['', '仅保存在本机'], slow: ['warn', '同步暂时连不上，先用本机数据'] };
   const [cls, text] = map[state] || map.local;
-  const chip = $('#syncChip'); chip.className = 'chip ' + cls; chip.lastElementChild.textContent = text;
-  $('#storeNote').textContent = state === 'on' ? NOTE_SYNC : NOTE_LOCAL;
+  const chip = SITE ? $('#pairChip') : $('#syncChip'); chip.className = 'chip ' + cls; chip.lastElementChild.textContent = SITE && state === 'local' ? '手机电脑同步' : text;
+  $('#storeNote').textContent = state === 'on' ? (SITE ? NOTE_SYNC_SITE : NOTE_SYNC) : NOTE_LOCAL;
 }
 const renderShelfIfVisible = () => { if (!$('#shelf').hidden) renderShelf(); };
 const samePos = (a, b) => !!(a && b && a.c === b.c && a.p === b.p);
 const Sync = {
   on: false, ready: false, col: null, assets: null, chains: new Map(), timers: new Map(),
   async init() {
+    if (SITE) return FB.init(this);
     if (!(window.claude && typeof window.claude.use === 'function')) return;
     setChip('connecting');
     const get = n => window.claude.use(n).catch(() => null);
@@ -676,8 +694,128 @@ const Sync = {
     if (!this.on || !m.synced) return;
     this.enqueue(m.id, () => this.col.doc(m.id).delete()).catch(() => {});
     if (m.asset) this.assets.delete(m.asset).catch(() => {});
+  },
+  stop() { /* stop syncing on this device; local books stay */
+    if (this.unsub) { try { this.unsub(); } catch (e) {} this.unsub = null; }
+    this.on = this.ready = false; this.col = null; this.assets = null;
+    for (const m of S.books) if (m.synced) { m.synced = false; DB.put('meta', m); }
+    setChip('local'); renderShelfIfVisible();
   }
 };
+async function fetchBookContent(asset) { /* returns chapters */
+  if (SITE) return FB.download(asset);
+  const r = await fetch('/_blob/' + asset);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+/* ---------- 网站版同步：Firebase Firestore，凭配对码访问，不需要登录 ---------- */
+const FIREBASE_CONFIG = { /* 公开的客户端参数（不是密钥），数据由 Firestore 安全规则保护 */
+  apiKey: 'AIzaSyATAuWdK57JwslTGnu9U2iFt5KvlP60xOY', authDomain: 'reader-sync-b2402.firebaseapp.com',
+  projectId: 'reader-sync-b2402', appId: '1:108883067680:web:7abda503707b38a136cd45' };
+const SYNC_KEY = 'reader-sync-code';
+const FB = {
+  code: null, db: null,
+  getCode() { try { return localStorage.getItem(SYNC_KEY); } catch (e) { return null; } },
+  setCode(c) { try { c ? localStorage.setItem(SYNC_KEY, c) : localStorage.removeItem(SYNC_KEY); } catch (e) {} },
+  newCode() { const a = new Uint8Array(15); crypto.getRandomValues(a); return [...a].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join(''); },
+  link(c) { return location.origin + location.pathname + '#sync=' + c; },
+  async lib() {
+    if (window.firebase && firebase.firestore) return;
+    await loadScript('https://www.gstatic.com/firebasejs/13.1.0/firebase-app-compat.js');
+    await loadScript('https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore-compat.js');
+  },
+  async init(sync) {
+    if (!FIREBASE_CONFIG) return;
+    $('#pairChip').hidden = false; $('#syncChip').hidden = true;
+    const m = location.hash.match(/sync=([a-z0-9]{15,40})/);
+    if (m) { this.setCode(m[1]); history.replaceState(null, '', location.pathname + location.search); toast('已和你的其他设备配对，正在同步书架和进度…', 5000); }
+    this.code = this.getCode();
+    if (!this.code) { setChip('local'); return; }
+    setChip('connecting');
+    try {
+      await this.lib();
+      if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      this.db = firebase.firestore();
+    } catch (e) { setChip('slow'); return; }
+    const root = this.db.collection('sync').doc(this.code);
+    root.set({ seen: Date.now() }, { merge: true }).catch(() => {});
+    sync.col = root.collection('books');
+    sync.assets = { upload: b => this.upload(b), delete: id => this.remove(id) };
+    const timer = setTimeout(() => { if (!sync.ready) setChip('slow'); }, 12000);
+    sync.unsub = sync.col.onSnapshot(snap => {
+      const changes = snap.docChanges();
+      if (!snap.metadata.fromCache && !sync.ready) {
+        clearTimeout(timer); sync.ready = sync.on = true; setChip('on');
+        setTimeout(() => sync.pushMissing(), 0);
+      }
+      mergeRemote(changes);
+    }, err => { clearTimeout(timer); sync.on = false; setChip('slow'); console.warn('sync', err); });
+  },
+  blobs() { return this.db.collection('sync').doc(this.code).collection('blobs'); },
+  async upload(blob) { /* Firestore 单个文档上限 1 MB，书的内容按 25 万字分块存 */
+    const text = await blob.text(); const id = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const CH = 250000, n = Math.max(1, Math.ceil(text.length / CH)), col = this.blobs();
+    for (let i = 0; i < n; i++) await col.doc(id + '_' + i).set({ d: text.slice(i * CH, (i + 1) * CH) });
+    await col.doc(id).set({ n, len: text.length, at: Date.now() });
+    return { id };
+  },
+  async download(id) {
+    const col = this.blobs(); const meta = await col.doc(id).get();
+    if (!meta.exists) throw new Error('云端没有这本书');
+    const { n } = meta.data(); let text = '';
+    for (let i = 0; i < n; i++) { const d = await col.doc(id + '_' + i).get(); if (!d.exists) throw new Error('云端内容不完整'); text += d.data().d; }
+    return JSON.parse(text);
+  },
+  async remove(id) {
+    const col = this.blobs(); const meta = await col.doc(id).get(); const n = meta.exists ? meta.data().n : 0;
+    for (let i = 0; i < n; i++) await col.doc(id + '_' + i).delete();
+    await col.doc(id).delete();
+  }
+};
+function qrInto(el, text) {
+  el.innerHTML = '<span style="color:#666;font-size:12px">正在生成二维码…</span>';
+  loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js').then(() => {
+    el.innerHTML = ''; new QRCode(el, { text, width: 180, height: 180, colorDark: '#1D2125', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+  }, () => { el.innerHTML = '<span style="color:#666;font-size:12px">二维码加载失败，请用下面的链接</span>'; });
+}
+function openPair() {
+  const box = $('#pairBox'), code = FB.code;
+  if (!code) {
+    box.innerHTML = `<button class="x" id="pairX" aria-label="关闭">×</button><h2>手机电脑同步</h2>
+      <p>开启后，这台设备上的书和阅读进度会保存到你自己的同步空间。再用手机扫码配对，两边的书架和进度就会自动互通，不需要注册或登录。</p>
+      <div class="row"><button class="btn primary" id="pairNew">在这台设备开启同步</button></div>
+      <hr><p style="margin-bottom:8px">已经在另一台设备开启了？输入那边显示的配对码：</p>
+      <div class="row"><input id="pairIn" placeholder="配对码" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="pairJoin">配对</button></div>`;
+  } else {
+    box.innerHTML = `<button class="x" id="pairX" aria-label="关闭">×</button><h2>用另一台设备扫码配对</h2>
+      <p>用另一台设备（手机或电脑）的相机扫描下面的二维码，打开的网页会自动和这台设备同步。也可以把配对链接发过去打开，或者在那边输入配对码。</p>
+      <div class="qr" id="pairQr"></div>
+      <div class="code" id="pairCode">${esc(code)}</div>
+      <div class="row"><button class="btn" id="pairCopy">复制配对链接</button></div>
+      <hr><p style="margin-bottom:8px">配对码相当于钥匙：拿到它的设备都能看到你的书架，请只发给自己的设备。</p>
+      <div class="row"><button class="btn danger" id="pairOff">这台设备停止同步</button></div>`;
+    qrInto($('#pairQr'), FB.link(code));
+  }
+  $('#pairBack').hidden = false;
+  $('#pairX').onclick = closePair;
+  const go = c => { FB.setCode(c); FB.code = c; closePair(); Sync.init(); };
+  if (!code) {
+    $('#pairNew').onclick = () => { go(FB.newCode()); setTimeout(openPair, 300); };
+    $('#pairJoin').onclick = () => {
+      const v = ($('#pairIn').value.match(/sync=([a-z0-9]+)/) || [, $('#pairIn').value])[1].trim().toLowerCase().replace(/\s+/g, '');
+      if (!/^[a-z0-9]{15,40}$/.test(v)) { toast('配对码不对，请检查一下'); return; }
+      go(v); toast('已配对，正在同步…');
+    };
+  } else {
+    $('#pairCopy').onclick = async () => { try { await navigator.clipboard.writeText(FB.link(code)); toast('配对链接已复制'); } catch (e) { prompt('复制这个链接：', FB.link(code)); } };
+    $('#pairOff').onclick = () => { FB.setCode(null); FB.code = null; Sync.stop(); closePair(); toast('这台设备已停止同步，书仍保留在本机'); };
+  }
+}
+function closePair() { $('#pairBack').hidden = true; }
+$('#pairChip').onclick = openPair;
+$('#pairBack').addEventListener('click', e => { if (e.target.id === 'pairBack') closePair(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#pairBack').hidden) closePair(); });
 function mergeRemote(changes) {
   let dirty = false;
   for (const ch of changes) {
@@ -822,9 +960,7 @@ async function openBook(id) {
   if (!content && meta.asset) {
     toast(`正在从云端取回《${meta.title}》…`, 0);
     try {
-      const r = await fetch('/_blob/' + meta.asset);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      content = { id, chapters: await r.json() };
+      content = { id, chapters: await fetchBookContent(meta.asset) };
       await DB.put('content', content);
       meta.remoteOnly = false; DB.put('meta', meta);
       toast(`《${meta.title}》已下载到这台设备`);
