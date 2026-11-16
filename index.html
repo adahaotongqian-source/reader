@@ -6,13 +6,13 @@
 <meta name="theme-color" content="#24466B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Murmur">
-<meta name="description" content="Murmur 低语：在浏览器里看书、听书的本地阅读器，支持 TXT 与 EPUB。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2324466B'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' fill='white' font-family='serif'%3E语%3C/text%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-title" content="Reader">
+<meta name="description" content="阅读器 Reader：在浏览器里看书、听书的本地阅读器，支持 TXT 与 EPUB。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2324466B'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' fill='white' font-family='serif'%3E读%3C/text%3E%3C/svg%3E">
 <style>[hidden]{display:none!important}body{margin:0}img{max-width:100%}</style>
 </head>
 <body>
-<title>Murmur 低语</title>
+<title>阅读器 Reader</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap">
@@ -72,7 +72,7 @@ button{cursor:pointer}
 .brand{display:flex;align-items:center;gap:14px}
 .seal{width:40px;height:40px;border-radius:5px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-family:var(--f-serif);font-weight:700;font-size:22px}
 .brand h1{margin:0;font-family:var(--f-serif);font-weight:700;font-size:24px;letter-spacing:.08em}
-.h1-cn{font-weight:600;font-size:.72em;color:var(--ink-2);letter-spacing:.2em;margin-left:4px}
+.h1-cn{font-weight:600;font-size:.72em;color:var(--ink-2);letter-spacing:.06em;margin-left:4px}
 .brand p{margin:2px 0 0;color:var(--ink-3);font-size:13px;letter-spacing:.04em}
 main.wrap{padding-block:0 64px}
 
@@ -230,8 +230,8 @@ main.wrap{padding-block:0 64px}
 <div id="shelf" class="view">
   <header class="shelf-head wrap">
     <div class="brand">
-      <div class="seal" aria-hidden="true">语</div>
-      <div><h1>Murmur <span class="h1-cn">低语</span></h1><p>你的书架 · 看与听同一份进度</p></div>
+      <div class="seal" aria-hidden="true">读</div>
+      <div><h1>阅读器 <span class="h1-cn">Reader</span></h1><p>你的书架 · 看与听同一份进度</p></div>
     </div>
     <div class="head-actions">
       <span class="chip" id="syncChip"><i></i><span>仅保存在本机</span></span>
@@ -528,10 +528,10 @@ async function parseEpub(file) {
 }
 
 /* ---------- sample guide ---------- */
-const GUIDE = { title: 'Murmur 使用指南', author: 'Murmur 低语', chapters: [
+const GUIDE = { title: '阅读器使用指南', author: '阅读器 Reader', chapters: [
   { title: '第一章　把书放上书架', heads: [0], paras: [
     '第一章　把书放上书架',
-    '欢迎来到 Murmur 低语。这是一个只属于你的小书房：你可以把自己电脑里的 TXT 或 EPUB 电子书放上书架，在这里看书，也可以让它读给你听。',
+    '欢迎使用阅读器 Reader。这是一个只属于你的小书房：你可以把自己电脑里的 TXT 或 EPUB 电子书放上书架，在这里看书，也可以让它读给你听。',
     '回到书架，点击右上角的「导入书籍」，选择一本或几本书；也可以直接把文件拖进书架页面。导入时，它会自动识别中文编码，并按照「第一章」「第二回」这样的标题切分章节。',
     '登录 Claude 账号打开这个页面时，书和阅读进度会保存到你自己的账号里：电脑上导入的书，手机上也能看到；手机上听到哪里，电脑上就接着从哪里读。书架右上角显示「已同步」就说明同步在工作。',
     '没有登录时，书只保存在这台设备的浏览器里。这本指南只留在本机，不会同步。'
