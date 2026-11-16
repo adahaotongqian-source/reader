@@ -95,7 +95,7 @@ label.sp input{accent-color:var(--accent);width:120px}
   </div>
   <div class="grid" id="grid"></div>
 
-  <p class="note">声音模型 Kokoro-82M v1.1-zh（Apache-2.0 开源），在你的浏览器里本机运行：只在第一次下载模型，之后离线可用、不限次数。有显卡加速（WebGPU）的电脑生成很快；没有的话会比较慢，只适合试听。编号是模型自带的，没有名字。</p>
+  <p class="note">声音模型 Kokoro-82M v1.1-zh（Apache-2.0 开源），在你的浏览器里本机运行：只在第一次下载模型（约 340 MB），之后离线可用、不限次数。有显卡加速（WebGPU）的电脑生成很快；没有的话会比较慢，只适合试听。编号是模型自带的，没有名字。</p>
 </div>
 
 <script>
@@ -103,8 +103,7 @@ label.sp input{accent-color:var(--accent);width:120px}
    Needs globals: pinyinPro (pinyin-pro), ort (onnxruntime-web). */
 const KokoroZh = (() => {
   const REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.1-zh-ONNX/resolve/main/';
-  const MODEL = REPO + 'onnx/model_quantized.onnx';
-  const CACHE = 'kokoro-zh-v1';
+  const CACHE = 'kokoro-zh-v2';
   const SR = 24000;
   const VOCAB = new Map([["$", 0], [";", 1], [":", 2], [",", 3], [".", 4], ["!", 5], ["?", 6], ["/", 7], ["—", 9], ["…", 10], ["\"", 11], ["(", 12], [")", 13], ["“", 14], ["”", 15], [" ", 16], ["̃", 17], ["ʣ", 18], ["ʥ", 19], ["ʦ", 20], ["ʨ", 21], ["ᵝ", 22], ["ㄓ", 23], ["A", 24], ["I", 25], ["ㄅ", 30], ["O", 31], ["ㄆ", 32], ["Q", 33], ["R", 34], ["S", 35], ["T", 36], ["ㄇ", 37], ["ㄈ", 38], ["W", 39], ["ㄉ", 40], ["Y", 41], ["ᵊ", 42], ["a", 43], ["b", 44], ["c", 45], ["d", 46], ["e", 47], ["f", 48], ["ㄊ", 49], ["h", 50], ["i", 51], ["j", 52], ["k", 53], ["l", 54], ["m", 55], ["n", 56], ["o", 57], ["p", 58], ["q", 59], ["r", 60], ["s", 61], ["t", 62], ["u", 63], ["v", 64], ["w", 65], ["x", 66], ["y", 67], ["z", 68], ["ɑ", 69], ["ɐ", 70], ["ɒ", 71], ["æ", 72], ["ㄋ", 73], ["ㄌ", 74], ["β", 75], ["ɔ", 76], ["ɕ", 77], ["ç", 78], ["ㄍ", 79], ["ɖ", 80], ["ð", 81], ["ʤ", 82], ["ə", 83], ["ㄎ", 84], ["ㄦ", 85], ["ɛ", 86], ["ɜ", 87], ["ㄏ", 88], ["ㄐ", 89], ["ɟ", 90], ["ㄑ", 91], ["ɡ", 92], ["ㄒ", 93], ["ㄔ", 94], ["ㄕ", 95], ["ㄗ", 96], ["ㄘ", 97], ["ㄙ", 98], ["月", 99], ["ㄚ", 100], ["ɨ", 101], ["ɪ", 102], ["ʝ", 103], ["ㄛ", 104], ["ㄝ", 105], ["ㄞ", 106], ["ㄟ", 107], ["ㄠ", 108], ["ㄡ", 109], ["ɯ", 110], ["ɰ", 111], ["ŋ", 112], ["ɳ", 113], ["ɲ", 114], ["ɴ", 115], ["ø", 116], ["ㄢ", 117], ["ɸ", 118], ["θ", 119], ["œ", 120], ["ㄣ", 121], ["ㄤ", 122], ["ɹ", 123], ["ㄥ", 124], ["ɾ", 125], ["ㄖ", 126], ["ㄧ", 127], ["ʁ", 128], ["ɽ", 129], ["ʂ", 130], ["ʃ", 131], ["ʈ", 132], ["ʧ", 133], ["ㄨ", 134], ["ʊ", 135], ["ʋ", 136], ["ㄩ", 137], ["ʌ", 138], ["ɣ", 139], ["ㄜ", 140], ["ㄭ", 141], ["χ", 142], ["ʎ", 143], ["十", 144], ["压", 145], ["言", 146], ["ʒ", 147], ["ʔ", 148], ["阳", 149], ["要", 150], ["阴", 151], ["应", 152], ["用", 153], ["又", 154], ["中", 155], ["ˈ", 156], ["ˌ", 157], ["ː", 158], ["穵", 159], ["外", 160], ["万", 161], ["ʰ", 162], ["王", 163], ["ʲ", 164], ["为", 165], ["文", 166], ["瓮", 167], ["我", 168], ["3", 169], ["5", 170], ["1", 171], ["2", 172], ["4", 173], ["元", 175], ["云", 176], ["ᵻ", 177]]);
   const ZH_MAP = {b:'ㄅ',p:'ㄆ',m:'ㄇ',f:'ㄈ',d:'ㄉ',t:'ㄊ',n:'ㄋ',l:'ㄌ',g:'ㄍ',k:'ㄎ',h:'ㄏ',j:'ㄐ',q:'ㄑ',x:'ㄒ',zh:'ㄓ',ch:'ㄔ',sh:'ㄕ',r:'ㄖ',z:'ㄗ',c:'ㄘ',s:'ㄙ',a:'ㄚ',o:'ㄛ',e:'ㄜ',ie:'ㄝ',ai:'ㄞ',ei:'ㄟ',ao:'ㄠ',ou:'ㄡ',an:'ㄢ',en:'ㄣ',ang:'ㄤ',eng:'ㄥ',er:'ㄦ',i:'ㄧ',u:'ㄨ',v:'ㄩ',ii:'ㄭ',iii:'十',ve:'月',ia:'压',ian:'言',iang:'阳',iao:'要',in:'阴',ing:'应',iong:'用',iou:'又',ong:'中',ua:'穵',uai:'外',uan:'万',uang:'王',uei:'为',uen:'文',ueng:'瓮',uo:'我',van:'元',vn:'云',R:'R'};
@@ -243,16 +242,15 @@ const KokoroZh = (() => {
     if (cache) { try { await cache.put(url, new Response(buf, { headers: { 'content-type': 'application/octet-stream' } })); } catch (e) {} }
     return buf;
   }
-  const F16 = 'https://huggingface.co/hsc666/Kokoro-82M-v1.1-zh-ONNX-webgpu/resolve/main/onnx/model_fp16.onnx';
+  const FP32 = REPO + 'onnx/model.onnx';
   let plan = null;
   async function pickPlan() {
     if (plan) return plan;
     const o = self.KOKORO_OPTS || {};
     if (o.model) return plan = { url: o.model.startsWith('http') ? o.model : REPO + o.model, ep: o.ep || ['wasm'], mb: 0, gpu: (o.ep || [])[0] === 'webgpu' };
     let ad = null; try { ad = navigator.gpu && await navigator.gpu.requestAdapter(); } catch (e) {}
-    if (ad && ad.features && ad.features.has('shader-f16')) return plan = { url: F16, ep: ['webgpu', 'wasm'], mb: 177, gpu: true };
-    if (ad) return plan = { url: REPO + 'onnx/model.onnx', ep: ['webgpu', 'wasm'], mb: 339, gpu: true };
-    return plan = { url: MODEL, ep: ['wasm'], mb: 127, gpu: false };
+    /* 只用 fp32：fp16 和 int8 版本在实测中输出的是噪音 */
+    return plan = { url: FP32, ep: ad ? ['webgpu', 'wasm'] : ['wasm'], mb: 339, gpu: !!ad };
   }
   async function isCached() { const p = await pickPlan(); try { const c = await caches.open(CACHE); return !!(await c.match(p.url)); } catch (e) { return false; } }
   function init(onProgress) {
@@ -263,6 +261,7 @@ const KokoroZh = (() => {
       const p = await pickPlan();
       ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/';
       ort.env.wasm.numThreads = o.threads || (self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1);
+      try { await caches.delete('kokoro-zh-v1'); } catch (e) {} /* 删掉旧的、有问题的模型缓存 */
       const bytes = await cachedFetch(p.url, onProgress);
       try { session = await ort.InferenceSession.create(bytes, { executionProviders: p.ep, graphOptimizationLevel: 'all' }); }
       catch (e) { if (p.gpu) { session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] }); p.gpu = false; } else throw e; }
@@ -291,7 +290,10 @@ const KokoroZh = (() => {
       speed: new ort.Tensor('float32', new Float32Array([speed]), [1]),
     };
     const out = await session.run(feeds);
-    return out.waveform.data;
+    const w = out.waveform.data; let mx = 0;
+    for (let i = 0; i < w.length; i += 7) { const a = Math.abs(w[i]); if (!(a <= 50)) { mx = Infinity; break; } if (a > mx) mx = a; }
+    if (mx > 4) throw new Error('模型输出异常（不是正常语音）');
+    return w;
   }
   const MALE = ['zm_009','zm_010','zm_011','zm_012','zm_013','zm_014','zm_015','zm_016','zm_020','zm_025','zm_029','zm_030','zm_031','zm_033','zm_034','zm_035','zm_037','zm_041','zm_045','zm_050','zm_052','zm_053','zm_054','zm_055','zm_056','zm_057','zm_058','zm_061','zm_062','zm_063','zm_064','zm_065','zm_066','zm_068','zm_069','zm_080','zm_081','zm_082','zm_089','zm_091','zm_095','zm_096','zm_097','zm_098','zm_100'];
   const FEMALE = ['zf_001','zf_002','zf_003','zf_004','zf_005','zf_006','zf_007','zf_008','zf_017','zf_018','zf_019','zf_021','zf_022','zf_023','zf_024','zf_026','zf_027','zf_028','zf_032','zf_036','zf_038','zf_039','zf_040','zf_042','zf_043','zf_044','zf_046','zf_047','zf_048','zf_049','zf_051','zf_059','zf_060','zf_067','zf_070','zf_071','zf_072','zf_073','zf_074','zf_075','zf_076','zf_077','zf_078','zf_079','zf_083','zf_084','zf_085','zf_086','zf_087','zf_088','zf_090','zf_092','zf_093','zf_094','zf_099'];
