@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#24466B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Murmur">
+<meta name="description" content="Murmur 低语：在浏览器里看书、听书的本地阅读器，支持 TXT 与 EPUB。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2324466B'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' fill='white' font-family='serif'%3E语%3C/text%3E%3C/svg%3E">
+<style>[hidden]{display:none!important}body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<title>Murmur 低语</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* Layout: 书架 = 居中网格书封；阅读 = 左目录 + 中间正文栏 + 底部常驻播放条 */
+:root{
+  --bg:#F2F3F1; --surface:#FFFFFF; --paper:#FCFCFA;
+  --ink:#1D2125; --ink-2:#5A6067; --ink-3:#8B9198;
+  --line:#DCDFDC; --accent:#24466B; --accent-soft:#E4EAF1; --on-accent:#FFFFFF;
+  --hl:rgba(36,70,107,.12); --hl-edge:rgba(36,70,107,.35);
+  --ok:#3C8A5A; --warn:#B07A1E;
+  --shadow:0 1px 2px rgba(20,30,40,.08),0 10px 24px -14px rgba(20,30,40,.35);
+  --f-serif:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  --f-sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  --fs:19px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#131518; --surface:#1A1D21; --paper:#16191C;
+  --ink:#E3E5E2; --ink-2:#A2A8AE; --ink-3:#6F767D;
+  --line:#2B3036; --accent:#93B2D6; --accent-soft:#1E2A38; --on-accent:#0F1A26;
+  --hl:rgba(147,178,214,.16); --hl-edge:rgba(147,178,214,.45);
+  --ok:#6FBF8C; --warn:#D9A84E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 24px -14px rgba(0,0,0,.8);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#131518; --surface:#1A1D21; --paper:#16191C;
+  --ink:#E3E5E2; --ink-2:#A2A8AE; --ink-3:#6F767D;
+  --line:#2B3036; --accent:#93B2D6; --accent-soft:#1E2A38; --on-accent:#0F1A26;
+  --hl:rgba(147,178,214,.16); --hl-edge:rgba(147,178,214,.45);
+  --ok:#6FBF8C; --warn:#D9A84E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 24px -14px rgba(0,0,0,.8);
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:14px;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.view{height:100%}
+
+/* ---------- buttons ---------- */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 16px;font-size:14px;transition:background .15s,border-color .15s}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.ibtn{border:0;background:transparent;border-radius:6px;padding:6px 10px;color:var(--ink-2);font-size:14px;display:inline-flex;align-items:center;gap:4px}
+.ibtn:hover{background:var(--accent-soft);color:var(--ink)}
+.ibtn[aria-pressed="true"]{color:var(--accent)}
+
+/* ---------- shelf ---------- */
+#shelf{overflow-y:auto}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.shelf-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-block:40px 28px}
+.brand{display:flex;align-items:center;gap:14px}
+.seal{width:40px;height:40px;border-radius:5px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-family:var(--f-serif);font-weight:700;font-size:22px}
+.brand h1{margin:0;font-family:var(--f-serif);font-weight:700;font-size:24px;letter-spacing:.08em}
+.h1-cn{font-weight:600;font-size:.72em;color:var(--ink-2);letter-spacing:.2em;margin-left:4px}
+.brand p{margin:2px 0 0;color:var(--ink-3);font-size:13px;letter-spacing:.04em}
+main.wrap{padding-block:0 64px}
+
+.cont{display:flex;align-items:center;gap:24px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px 26px;margin-bottom:44px}
+.cont .mini{width:64px;flex:none}
+.cont .mini .cover{padding:8px 6px 6px 12px;pointer-events:none}
+.cont .mini .cv-title{font-size:11px;-webkit-line-clamp:4}
+.cont .mini .cv-author,.cont .mini .cv-fmt,.cont .mini .cv-rule{display:none}
+.cont-info{flex:1;min-width:200px}
+.eyebrow{font-size:12px;color:var(--ink-3);letter-spacing:.16em}
+.cont-info h3{margin:6px 0 4px;font-family:var(--f-serif);font-size:20px;font-weight:600}
+.cont-info .where{color:var(--ink-2);font-size:13px}
+.cont-info .bar{margin-top:12px;max-width:360px}
+.cont-actions{display:flex;gap:10px}
+
+.sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:28px}
+.sec-head h2{margin:0;font-family:var(--f-serif);font-size:18px;font-weight:600;letter-spacing:.1em}
+.sec-head span{color:var(--ink-3);font-size:13px;font-variant-numeric:tabular-nums}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:36px 28px}
+.book{position:relative;min-width:0}
+.cover{position:relative;display:flex;flex-direction:column;width:100%;aspect-ratio:3/4.2;max-width:100%;border:0;text-align:left;
+  background:var(--c);color:#fff;border-radius:2px 6px 6px 2px;padding:18px 14px 14px 22px;box-shadow:var(--shadow);transition:transform .2s ease,box-shadow .2s ease;overflow:hidden}
+.cover::before{content:"";position:absolute;inset:0 auto 0 0;width:9px;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(0,0,0,0));}
+.cover::after{content:"";position:absolute;top:0;bottom:0;left:11px;width:1px;background:rgba(255,255,255,.14)}
+.book:hover .cover{transform:translateY(-3px)}
+.cv-title{font-family:var(--f-serif);font-weight:600;font-size:17px;line-height:1.45;letter-spacing:.04em;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden;word-break:break-all}
+.cv-rule{width:22px;height:1px;background:rgba(255,255,255,.5);margin:12px 0 8px}
+.cv-author{font-size:12px;opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cv-fmt{margin-top:auto;font-size:10px;letter-spacing:.18em;opacity:.6}
+.b-meta{margin-top:12px}
+.b-title{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b-sub{font-size:12px;color:var(--ink-3);margin-top:3px;font-variant-numeric:tabular-nums}
+.bar{height:3px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.b-del{position:absolute;top:8px;right:8px;border:0;border-radius:4px;padding:3px 8px;font-size:12px;background:rgba(0,0,0,.45);color:#fff;opacity:0;transition:opacity .15s}
+.book:hover .b-del,.b-del:focus-visible,.b-del.armed{opacity:1}
+.b-del.armed{background:#A3312F}
+.add-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;aspect-ratio:3/4.2;max-width:100%;border:1.5px dashed var(--line);border-radius:6px;background:transparent;color:var(--ink-2);text-align:center;padding:12px}
+.add-tile:hover{border-color:var(--accent);color:var(--accent)}
+.add-tile .plus{font-size:28px;line-height:1;font-weight:300}
+.add-tile small{color:var(--ink-3);font-size:12px;line-height:1.6}
+.note{margin-top:56px;color:var(--ink-3);font-size:12.5px;line-height:1.8;max-width:60em}
+.drop-mask{position:fixed;inset:12px;border:2px dashed var(--accent);border-radius:14px;background:color-mix(in srgb,var(--bg) 85%,transparent);display:none;place-items:center;font-family:var(--f-serif);font-size:22px;color:var(--accent);z-index:30;pointer-events:none}
+#shelf.dragging .drop-mask{display:grid}
+
+/* ---------- reader ---------- */
+#reader{display:grid;grid-template-rows:52px auto minmax(0,1fr) auto;background:var(--paper)}
+.r-top{display:flex;align-items:center;gap:6px;padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);background:var(--surface);min-width:0}
+.r-title{flex:1;min-width:0;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2);font-size:13px}
+.r-title b{color:var(--ink);font-family:var(--f-serif);font-weight:600;font-size:15px;margin-right:10px}
+.r-tools{display:flex;gap:2px}
+.r-body{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:0;position:relative}
+#reader.toc-off .r-body{grid-template-columns:0 minmax(0,1fr)}
+#reader.toc-off .toc{visibility:hidden}
+.toc{border-right:1px solid var(--line);background:var(--surface);overflow-y:auto;display:flex;flex-direction:column;min-width:0}
+.toc-head{position:sticky;top:0;background:var(--surface);padding:16px 20px 10px;font-size:12px;letter-spacing:.16em;color:var(--ink-3);display:flex;justify-content:space-between}
+.toc ol{list-style:none;margin:0;padding:0 0 12px}
+.toc li button{display:block;width:100%;border:0;background:transparent;text-align:left;padding:8px 20px;font-size:13.5px;line-height:1.5;color:var(--ink-2);border-left:2px solid transparent}
+.toc li button:hover{background:var(--accent-soft);color:var(--ink)}
+.toc li button.on{color:var(--accent);font-weight:600;border-left-color:var(--accent);background:var(--accent-soft)}
+.toc-foot{margin-top:auto;padding:14px 20px 18px;border-top:1px solid var(--line);font-size:12px;line-height:1.7;color:var(--ink-3)}
+.scroller{overflow-y:auto;min-width:0;scroll-padding-top:40px}
+.article{max-width:36em;margin:0 auto;padding:56px 32px 30vh;font-family:var(--f-serif);font-size:var(--fs);line-height:1.95;letter-spacing:.02em;color:var(--ink)}
+.article.sans{font-family:var(--f-sans)}
+.para{margin:0 0 .85em;text-indent:2em;text-align:justify}
+.para.sub{text-indent:0;font-weight:600;margin-top:1.4em}
+.ch-title{text-indent:0;text-align:center;font-size:1.45em;font-weight:700;letter-spacing:.08em;line-height:1.5;margin:.4em 0 1.6em;text-wrap:balance}
+.s{border-radius:3px;transition:background-color .2s}
+.s.cur{background:var(--hl);box-shadow:0 0 0 2px var(--hl);}
+.ch-nav{display:flex;justify-content:center;gap:12px;margin-top:3em;font-family:var(--f-sans);font-size:14px}
+.ch-nav .btn{min-width:120px}
+
+.player{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-top:1px solid var(--line);background:var(--surface)}
+.pl-ctrl{display:flex;align-items:center;gap:6px}
+.pl-ctrl .ibtn{width:36px;height:36px;justify-content:center;padding:0}
+.play{width:46px;height:46px;border-radius:50%;border:0;background:var(--accent);color:var(--on-accent);display:grid;place-items:center}
+.play:hover{filter:brightness(1.08)}
+.pl-info{flex:1;min-width:180px;line-height:1.5}
+#plState{font-size:13px;color:var(--ink);display:flex;align-items:center;gap:8px}
+#plPos{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
+.playing .dot{background:var(--accent);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.3}}
+.pl-set{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.pl-set label{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3);letter-spacing:.06em}
+.pl-set select{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 8px;font-size:13px;max-width:240px;letter-spacing:0}
+.pl-set input[type=range]{width:110px;accent-color:var(--accent)}
+.pl-set output{font-size:13px;color:var(--ink);min-width:3em;font-variant-numeric:tabular-nums;letter-spacing:0}
+#locateBtn{padding:6px 12px;font-size:13px}
+
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(10px);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;max-width:min(90vw,560px);text-align:center;line-height:1.6}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* sync + mobile helpers */
+.head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:4px 11px;white-space:nowrap;background:var(--surface)}
+.chip i{width:6px;height:6px;border-radius:50%;background:var(--ink-3)}
+.chip.on i{background:var(--ok)}
+.chip.warn i{background:var(--warn)}
+.sync-bar{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:8px 16px;background:var(--accent-soft);font-size:13px;border-bottom:1px solid var(--line)}
+.sync-bar .btn{padding:4px 12px;font-size:13px}
+.toc-back{display:none}
+.r-top{grid-row:1}.sync-bar{grid-row:2}.r-body{grid-row:3}.player{grid-row:4}
+#setBtn{display:none}
+.here{position:fixed;z-index:8;padding:7px 14px;font-size:13px;border-radius:999px;box-shadow:var(--shadow)}
+.player{position:relative}
+
+@media (max-width:820px){
+  .shelf-head{padding-block:22px 18px}
+  .brand h1{font-size:20px}
+  .seal{width:34px;height:34px;font-size:19px}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:26px 16px}
+  .cover{padding:12px 9px 10px 16px}
+  .cover::after{left:10px}
+  .cv-title{font-size:14px;-webkit-line-clamp:4}
+  .cv-rule{margin:8px 0 6px}
+  .b-title{font-size:13px}
+  .b-del{opacity:1;top:6px;right:6px;padding:2px 6px;font-size:11px}
+  .cont{padding:16px;gap:14px;margin-bottom:30px}
+  .cont .mini{display:none}
+  .cont-info{min-width:0;flex:1}
+  .cont-info h3{font-size:17px}
+  .cont-actions{width:100%}
+  .cont-actions .btn{flex:1;padding:11px}
+  .note{margin-top:40px}
+  .r-body{grid-template-columns:minmax(0,1fr)}
+  #reader.toc-off .r-body{grid-template-columns:minmax(0,1fr)}
+  .toc{position:absolute;inset:0 auto 0 0;width:min(300px,85vw);z-index:5;box-shadow:var(--shadow)}
+  .toc li button{padding:11px 20px;font-size:14.5px}
+  .toc-back{display:block;position:absolute;inset:0;background:rgba(0,0,0,.35);z-index:4;border:0}
+  #reader.toc-off .toc-back{display:none}
+  .lbl{display:none}
+  .r-top{gap:2px}
+  .r-title b{display:none}
+  .r-tools .ibtn{padding:6px 7px}
+  .article{padding:26px 20px 40vh;line-height:1.9}
+  .player{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"info set" "ctrl ctrl" "panel panel";gap:4px 12px;padding-top:10px;padding-bottom:12px}
+  .pl-info{grid-area:info;min-width:0}
+  #setBtn{display:inline-flex;grid-area:set;align-self:center;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px}
+  .pl-ctrl{grid-area:ctrl;justify-content:center;gap:34px;padding-top:2px}
+  .pl-ctrl .ibtn{width:46px;height:46px}
+  .play{width:58px;height:58px}
+  #locateBtn{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(100% + 12px);box-shadow:var(--shadow);border-radius:999px}
+  .pl-set{grid-area:panel;display:none;flex-direction:column;align-items:stretch;gap:12px;padding:10px 0 2px;border-top:1px solid var(--line);margin-top:6px}
+  .player.set-open .pl-set{display:flex}
+  .pl-set label{justify-content:space-between;font-size:13px}
+  .pl-set select{max-width:none;flex:1;font-size:15px;padding:8px}
+  .pl-set input[type=range]{flex:1;width:auto}
+  #toast{bottom:200px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div id="shelf" class="view">
+  <header class="shelf-head wrap">
+    <div class="brand">
+      <div class="seal" aria-hidden="true">语</div>
+      <div><h1>Murmur <span class="h1-cn">低语</span></h1><p>你的书架 · 看与听同一份进度</p></div>
+    </div>
+    <div class="head-actions">
+      <span class="chip" id="syncChip"><i></i><span>仅保存在本机</span></span>
+      <button class="btn primary" id="importBtn">导入书籍</button>
+      <input type="file" id="fileIn" accept=".txt,.epub,text/plain,application/epub+zip" multiple hidden>
+    </div>
+  </header>
+  <main class="wrap">
+    <section id="cont"></section>
+    <div class="sec-head"><h2>书架</h2><span id="count"></span></div>
+    <div id="grid" class="grid"></div>
+    <p class="note" id="storeNote">书只保存在这台设备的这个浏览器里，不会上传到任何地方；换浏览器或清除网站数据后需要重新导入。支持 TXT（自动识别 UTF-8 / GBK 编码，按「第X章」等标题切分章节）和未加密的 EPUB。</p>
+  </main>
+  <div class="drop-mask">松开即可导入</div>
+</div>
+
+<div id="reader" class="view" hidden>
+  <header class="r-top">
+    <button id="backBtn" class="ibtn" aria-label="返回书架">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="lbl">书架</span></button>
+    <button id="tocBtn" class="ibtn" aria-pressed="true" aria-label="目录">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="lbl">目录</span></button>
+    <div class="r-title"><b id="rBook"></b><span id="rChap"></span></div>
+    <div class="r-tools">
+      <button id="fontDown" class="ibtn" aria-label="缩小字号">A−</button>
+      <button id="fontUp" class="ibtn" aria-label="放大字号">A+</button>
+      <button id="fontFam" class="ibtn" aria-label="切换字体">宋体</button>
+    </div>
+  </header>
+  <div class="sync-bar" id="syncBar" hidden><span id="syncBarText"></span><button class="btn primary" id="syncJump">跳过去</button><button class="btn" id="syncIgnore">留在这里</button></div>
+  <div class="r-body">
+    <button class="toc-back" id="tocBack" aria-label="关闭目录"></button>
+    <aside id="toc" class="toc">
+      <div class="toc-head"><span>目录</span><span id="tocCount"></span></div>
+      <ol id="tocList"></ol>
+      <div class="toc-foot" id="tocFoot">双击正文任意一句，从那里开始朗读。空格键：播放 / 暂停。</div>
+    </aside>
+    <div id="scroller" class="scroller" tabindex="-1"><article id="article" class="article"></article></div>
+  </div>
+  <footer class="player" id="player">
+    <div class="pl-ctrl">
+      <button id="prevBtn" class="ibtn" aria-label="上一段" title="上一段">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 3v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14 3.5v11L6.5 9z" fill="currentColor"/></svg></button>
+      <button id="playBtn" class="play" aria-label="播放">
+        <svg id="icPlay" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M5 3l10 6-10 6z" fill="currentColor"/></svg>
+        <svg id="icPause" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" hidden><rect x="4" y="3" width="3.2" height="12" rx="1" fill="currentColor"/><rect x="10.8" y="3" width="3.2" height="12" rx="1" fill="currentColor"/></svg></button>
+      <button id="nextBtn" class="ibtn" aria-label="下一段" title="下一段">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M14 3v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M4 3.5v11L11.5 9z" fill="currentColor"/></svg></button>
+    </div>
+    <div class="pl-info">
+      <div id="plState"><span class="dot"></span><span id="plStateText">未在朗读</span></div>
+      <div id="plPos"></div>
+    </div>
+    <button id="setBtn" class="ibtn" aria-expanded="false">声音 · 语速</button>
+    <button id="locateBtn" class="btn" hidden>回到朗读位置</button>
+    <div class="pl-set">
+      <label for="voiceSel">声音<select id="voiceSel"></select></label>
+      <label for="rate">语速<input type="range" id="rate" min="0.7" max="1.6" step="0.1" value="1"><output id="rateOut" for="rate">1.0×</output></label>
+    </div>
+  </footer>
+</div>
+<button class="btn primary here" id="hereBtn" hidden>从这里读</button>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clean = s => String(s || '').replace(/[\s 　]+/g, ' ').trim();
+const HAS_WORD = /[\p{L}\p{N}]/u;
+
+/* ---------- prefs (per-browser convenience) ---------- */
+const PREF_KEY = 'jingting-prefs';
+const TOUCH = matchMedia('(pointer:coarse)').matches;
+let prefs = { fs: matchMedia('(max-width:820px)').matches ? 18 : 19, serif: true, voice: '', rate: 1, toc: true };
+try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}')); } catch (e) {}
+const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) {} };
+
+/* ---------- storage: IndexedDB with in-memory fallback ---------- */
+const DB = {
+  db: null, ok: false, mem: { meta: new Map(), content: new Map() },
+  async open() {
+    try {
+      this.db = await new Promise((res, rej) => {
+        const r = indexedDB.open('jingting-books', 1);
+        r.onupgradeneeded = () => { const d = r.result; d.createObjectStore('meta', { keyPath: 'id' }); d.createObjectStore('content', { keyPath: 'id' }); };
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      });
+      this.ok = true;
+    } catch (e) { this.ok = false; }
+  },
+  tx(store, mode, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(store, mode); const r = fn(t.objectStore(store));
+      t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  },
+  async all(store) { if (this.ok) { try { return await this.tx(store, 'readonly', s => s.getAll()); } catch (e) {} } return [...this.mem[store].values()]; },
+  async get(store, id) { if (this.ok) { try { return await this.tx(store, 'readonly', s => s.get(id)); } catch (e) {} } return this.mem[store].get(id); },
+  async put(store, obj) { this.mem[store].set(obj.id, obj); if (this.ok) { try { await this.tx(store, 'readwrite', s => s.put(obj)); } catch (e) { console.warn(e); } } },
+  async del(store, id) { this.mem[store].delete(id); if (this.ok) { try { await this.tx(store, 'readwrite', s => s.delete(id)); } catch (e) {} } }
+};
+
+/* ---------- text helpers ---------- */
+const ENDERS = '。！？!?；;…';
+const TRAIL = '。！？!?；;…」』”’）)】"\'';
+function splitSentences(t) {
+  const out = []; let buf = '';
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i]; buf += ch;
+    if (ENDERS.includes(ch)) {
+      while (i + 1 < t.length && TRAIL.includes(t[i + 1])) buf += t[++i];
+      if (HAS_WORD.test(buf)) { out.push(buf); buf = ''; }
+    } else if (buf.length > 160 && '，,、：:'.includes(ch)) { out.push(buf); buf = ''; }
+  }
+  if (buf) { if (out.length && !HAS_WORD.test(buf)) out[out.length - 1] += buf; else out.push(buf); }
+  return out.length ? out : [t];
+}
+function chunkText(t, n) {
+  if (t.length <= n) return [t];
+  const out = []; let buf = '';
+  for (const s of splitSentences(t)) {
+    if (buf.length + s.length > n && buf) { out.push(buf); buf = ''; }
+    if (s.length > n) { for (let i = 0; i < s.length; i += n) out.push(s.slice(i, i + n)); } else buf += s;
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
+/* ---------- TXT ---------- */
+function decodeText(buf) {
+  const u8 = new Uint8Array(buf);
+  if (u8[0] === 0xFF && u8[1] === 0xFE) return new TextDecoder('utf-16le').decode(u8);
+  if (u8[0] === 0xFE && u8[1] === 0xFF) return new TextDecoder('utf-16be').decode(u8);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(u8); } catch (e) {}
+  try { return new TextDecoder('gb18030').decode(u8); } catch (e) { return new TextDecoder('utf-8').decode(u8); }
+}
+const CH_RE = /^(第[0-9０-９零〇一二两三四五六七八九十百千万]+[章节回卷集部篇幕].{0,40}|(序章|序言|序|楔子|引子|前言|后记|尾声|终章|番外|附录)([\s:：·、].{0,40})?|chapter\s*\d+.{0,40})$/i;
+function parseTxt(text) {
+  const lines = text.split(/\r\n|\r|\n/).map(l => l.replace(/^[\s　﻿]+|[\s　]+$/g, '')).filter(Boolean);
+  const chapters = []; let cur = null;
+  for (const l of lines) {
+    if (l.length <= 50 && CH_RE.test(l)) { cur = { title: l, paras: [l], heads: [0] }; chapters.push(cur); }
+    else { if (!cur) { cur = { title: '卷首', paras: [], heads: [] }; chapters.push(cur); } cur.paras.push(l); }
+  }
+  const real = chapters.filter(c => c.heads.length);
+  if (real.length < 2) {
+    const all = chapters.flatMap(c => c.paras); const out = []; let c = null, len = 0;
+    for (const l of all) { if (!c || len > 4000) { c = { title: `第 ${out.length + 1} 部分`, paras: [], heads: [] }; out.push(c); len = 0; } c.paras.push(l); len += l.length; }
+    return out;
+  }
+  return chapters.filter(c => c.paras.length);
+}
+
+/* ---------- EPUB ---------- */
+const parseXml = (s, type) => new DOMParser().parseFromString(s, type || 'application/xml');
+const byTag = (doc, tag) => [...doc.getElementsByTagNameNS('*', tag)];
+const dirOf = p => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+function resolvePath(base, rel) {
+  rel = (rel || '').split('#')[0];
+  try { rel = decodeURIComponent(rel); } catch (e) {}
+  if (rel.startsWith('/')) return rel.slice(1);
+  const parts = base ? base.split('/') : [];
+  for (const seg of rel.split('/')) { if (seg === '..') parts.pop(); else if (seg !== '.' && seg !== '') parts.push(seg); }
+  return parts.join('/');
+}
+function zfile(zip, path) {
+  if (!path) return null;
+  return zip.file(path) || zip.file(encodeURI(path)) || Object.values(zip.files).find(f => f.name.toLowerCase() === path.toLowerCase()) || null;
+}
+function parseDoc(s) {
+  let d = parseXml(s, 'application/xhtml+xml');
+  if (d.getElementsByTagName('parsererror').length) d = parseXml(s, 'text/html');
+  return d;
+}
+const BLOCK = new Set('p div h1 h2 h3 h4 h5 h6 li blockquote pre section article dd dt tr table ul ol dl figure figcaption header footer aside nav body td th hr'.split(' '));
+const SKIP = new Set('script style head title svg math rt rp noscript'.split(' '));
+function extract(root, out, heads, ids) {
+  let buf = '';
+  const flush = () => { const t = clean(buf); if (t && HAS_WORD.test(t)) out.push(t); buf = ''; };
+  const walk = (node, inHead) => {
+    for (const n of node.childNodes) {
+      if (n.nodeType === 3) { buf += n.nodeValue; continue; }
+      if (n.nodeType !== 1) continue;
+      const tag = (n.localName || '').toLowerCase();
+      if (SKIP.has(tag)) continue;
+      const isBlock = BLOCK.has(tag);
+      if (isBlock) flush();
+      const id = n.getAttribute && n.getAttribute('id');
+      if (id && !(id in ids)) ids[id] = out.length;
+      if (tag === 'br') { flush(); continue; }
+      if (isBlock) {
+        const isH = /^h[1-6]$/.test(tag); const before = out.length;
+        walk(n, inHead || isH); flush();
+        if (isH || inHead) for (let k = before; k < out.length; k++) heads.add(k);
+      } else walk(n, inHead);
+    }
+  };
+  walk(root, false); flush();
+}
+async function parseEpub(file) {
+  if (typeof JSZip === 'undefined') throw new Error('EPUB 解析组件没有加载成功，请检查网络后刷新');
+  const zip = await JSZip.loadAsync(file);
+  const cont = zfile(zip, 'META-INF/container.xml');
+  if (!cont) throw new Error('这不是标准的 EPUB 文件');
+  const opfPath = byTag(parseXml(await cont.async('string')), 'rootfile')[0]?.getAttribute('full-path');
+  const opfF = zfile(zip, opfPath);
+  if (!opfF) throw new Error('找不到书籍信息文件');
+  if (zfile(zip, 'META-INF/encryption.xml') && !zfile(zip, 'META-INF/encryption.xml').name.endsWith('/')) {
+    const enc = await zfile(zip, 'META-INF/encryption.xml').async('string');
+    if (/EncryptedData/.test(enc) && !/font/i.test(enc)) throw new Error('这本 EPUB 有版权加密（DRM），无法读取');
+  }
+  const opf = parseXml(await opfF.async('string')); const base = dirOf(opfPath);
+  const title = clean(byTag(opf, 'title')[0]?.textContent);
+  const author = clean(byTag(opf, 'creator')[0]?.textContent);
+  const man = {};
+  byTag(opf, 'item').forEach(it => { man[it.getAttribute('id')] = { href: resolvePath(base, it.getAttribute('href')), type: it.getAttribute('media-type') || '', props: it.getAttribute('properties') || '' }; });
+  const spineEl = byTag(opf, 'spine')[0];
+  const spine = byTag(opf, 'itemref').map(r => man[r.getAttribute('idref')]).filter(x => x && /html|xml/i.test(x.type));
+
+  let toc = [];
+  const navItem = Object.values(man).find(m => /\bnav\b/.test(m.props));
+  if (navItem) {
+    const f = zfile(zip, navItem.href);
+    if (f) {
+      const d = parseDoc(await f.async('string'));
+      const navs = [...d.getElementsByTagName('nav')];
+      const nav = navs.find(n => /toc/.test((n.getAttribute('epub:type') || '') + (n.getAttributeNS && n.getAttributeNS('http://www.idpf.org/2007/ops', 'type') || ''))) || navs[0];
+      if (nav) [...nav.getElementsByTagName('a')].forEach(a => {
+        const h = a.getAttribute('href'); if (!h) return;
+        toc.push({ title: clean(a.textContent), file: resolvePath(dirOf(navItem.href), h), hash: decodeURIComponent(h.split('#')[1] || '') });
+      });
+    }
+  }
+  if (!toc.length) {
+    const ncxId = spineEl?.getAttribute('toc');
+    const ncx = (ncxId && man[ncxId]) || Object.values(man).find(m => /ncx/.test(m.type));
+    if (ncx) {
+      const f = zfile(zip, ncx.href);
+      if (f) {
+        const d = parseXml(await f.async('string'));
+        byTag(d, 'navPoint').forEach(np => {
+          const label = byTag(np, 'text')[0]; const src = byTag(np, 'content')[0]?.getAttribute('src');
+          if (src) toc.push({ title: clean(label?.textContent), file: resolvePath(dirOf(ncx.href), src), hash: decodeURIComponent(src.split('#')[1] || '') });
+        });
+      }
+    }
+  }
+
+  const all = [], heads = new Set(), fileStart = {}, fileEnd = {}, idMap = {};
+  for (const it of spine) {
+    if (it.href in fileStart) continue;
+    const f = zfile(zip, it.href); if (!f) continue;
+    const d = parseDoc(await f.async('string'));
+    const body = d.getElementsByTagName('body')[0] || d.documentElement;
+    const out = [], hs = new Set(), ids = {};
+    extract(body, out, hs, ids);
+    fileStart[it.href] = all.length; idMap[it.href] = {};
+    for (const k in ids) idMap[it.href][k] = all.length + ids[k];
+    hs.forEach(h => heads.add(all.length + h));
+    for (const p of out) all.push(p);
+    fileEnd[it.href] = all.length;
+  }
+  if (!all.length) throw new Error('没有找到可读的文字（可能是图片版或加密的书）');
+
+  const chapters = [];
+  const mk = (a, b, t) => {
+    if (b <= a) return;
+    const paras = all.slice(a, b); const h = [];
+    for (let i = a; i < b; i++) if (heads.has(i)) h.push(i - a);
+    const guess = h.length ? paras[h[0]].slice(0, 40) : (paras[0].length <= 30 ? paras[0] : `第 ${chapters.length + 1} 节`);
+    chapters.push({ title: t || guess, paras, heads: h });
+  };
+  const starts = [];
+  for (const t of toc) {
+    if (!(t.file in fileStart)) continue;
+    let s = fileStart[t.file];
+    if (t.hash && idMap[t.file][t.hash] != null) s = idMap[t.file][t.hash];
+    if (s >= all.length) continue;
+    starts.push({ s, title: t.title });
+  }
+  starts.sort((a, b) => a.s - b.s);
+  const uniq = [];
+  for (const x of starts) { if (uniq.length && uniq[uniq.length - 1].s === x.s) continue; uniq.push(x); }
+  if (uniq.length) {
+    if (uniq[0].s > 0) mk(0, uniq[0].s, '卷首');
+    uniq.forEach((x, i) => mk(x.s, i + 1 < uniq.length ? uniq[i + 1].s : all.length, x.title));
+  } else {
+    spine.forEach(it => { if (it.href in fileStart) mk(fileStart[it.href], fileEnd[it.href], ''); });
+  }
+  return { title: title || file.name.replace(/\.epub$/i, ''), author, chapters };
+}
+
+/* ---------- sample guide ---------- */
+const GUIDE = { title: 'Murmur 使用指南', author: 'Murmur 低语', chapters: [
+  { title: '第一章　把书放上书架', heads: [0], paras: [
+    '第一章　把书放上书架',
+    '欢迎来到 Murmur 低语。这是一个只属于你的小书房：你可以把自己电脑里的 TXT 或 EPUB 电子书放上书架，在这里看书，也可以让它读给你听。',
+    '回到书架，点击右上角的「导入书籍」，选择一本或几本书；也可以直接把文件拖进书架页面。导入时，它会自动识别中文编码，并按照「第一章」「第二回」这样的标题切分章节。',
+    '登录 Claude 账号打开这个页面时，书和阅读进度会保存到你自己的账号里：电脑上导入的书，手机上也能看到；手机上听到哪里，电脑上就接着从哪里读。书架右上角显示「已同步」就说明同步在工作。',
+    '没有登录时，书只保存在这台设备的浏览器里。这本指南只留在本机，不会同步。'
+  ]},
+  { title: '第二章　看书', heads: [0], paras: [
+    '第二章　看书',
+    '点开一本书，左侧是目录，点任意一章就能跳过去。顶部的「A−」和「A+」用来调整字号，旁边的按钮可以在宋体和黑体之间切换。',
+    '你读到哪里，它就记到哪里。下次回到书架，最上方会出现「继续阅读」，点一下，就能接着上次的位置往下看。'
+  ]},
+  { title: '第三章　听书', heads: [0], paras: [
+    '第三章　听书',
+    '按下底部中间的播放键，或者直接按空格键，它就会从你正在看的位置开始朗读。正在读的那一句会被轻轻标亮，页面也会跟着往下翻；一章读完，会自动进入下一章。',
+    '想从某一句开始听？双击那一句就行。如果你在朗读时自己滚动了页面，它不会把你拽回去，而是在底部出现「回到朗读位置」，点一下就能回来。',
+    '听和看用的是同一份进度：暂停以后接着看，再按播放，它会从你看到的地方继续读；听到一半关掉页面，下次打开，书页也会停在你听到的那一段。'
+  ]},
+  { title: '第四章　挑一个好听的声音', heads: [0], paras: [
+    '第四章　挑一个好听的声音',
+    '声音在底部右侧选择。浏览器自带的语音完全免费，但不同浏览器差别很大：用 Microsoft Edge 打开本页，可以选到「云健」「云扬」这类低沉有磁性的男声，以及「晓晓」等女声，它们都是自然语音，停顿和语气最接近真人；Chrome 里的「Google 普通话」也还不错。',
+    '如果喜欢更慢、更沉的感觉，可以把语速调到 0.9 倍左右，男声会显得更稳。',
+    '如果列表里出现了「Claude 语音」，也可以试一试。语速可以在 0.7 倍到 1.6 倍之间调整，改动会从当前这一句开始生效。',
+    '好了，这本指南就到这里。去导入一本你喜欢的书吧。'
+  ]}
+]};
+
+/* ---------- state ---------- */
+const S = {
+  books: [], book: null, content: null, rc: -1, sents: [], paraEls: [],
+  pos: { c: 0, p: 0, s: 0 }, playing: false, gen: 0, follow: true,
+  voices: [], tts: null, claudeActive: false, hlEls: [], userAt: 0, wl: null, fails: 0
+};
+const COVERS = ['#24466B', '#3D5A4A', '#6E2F33', '#454B54', '#7A6131', '#2F4F5F', '#5A3F5E'];
+const coverColor = t => { let h = 0; for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return COVERS[h % COVERS.length]; };
+const fmtLabel = b => b.sample ? 'GUIDE' : (b.format || '').toUpperCase();
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg, ms = 3200) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT); if (ms) toastT = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+/* ---------- account sync: books + progress across devices ---------- */
+const DEVICE_NAME = TOUCH ? '手机' : '电脑';
+let DEVICE_ID = 'd' + Math.random().toString(36).slice(2, 10);
+try { DEVICE_ID = localStorage.getItem('jingting-device') || DEVICE_ID; localStorage.setItem('jingting-device', DEVICE_ID); } catch (e) {}
+const NOTE_LOCAL = '书只保存在这台设备的这个浏览器里，不会上传到任何地方；换浏览器或清除网站数据后需要重新导入。支持 TXT（自动识别 UTF-8 / GBK 编码，按「第X章」等标题切分章节）和未加密的 EPUB。';
+const NOTE_SYNC = '书和阅读进度保存在你的 Claude 账号里，只有你自己能看到。在手机和电脑上登录同一个 Claude 账号、打开这个页面，书架和进度就会自动同步。支持 TXT（自动识别 UTF-8 / GBK 编码）和未加密的 EPUB，单本最大 20MB。';
+function setChip(state) {
+  const map = { connecting: ['', '正在连接同步…'], on: ['on', '已同步 · 手机电脑进度互通'], local: ['', '仅保存在本机'], slow: ['warn', '同步暂时连不上，先用本机数据'] };
+  const [cls, text] = map[state] || map.local;
+  const chip = $('#syncChip'); chip.className = 'chip ' + cls; chip.lastElementChild.textContent = text;
+  $('#storeNote').textContent = state === 'on' ? NOTE_SYNC : NOTE_LOCAL;
+}
+const renderShelfIfVisible = () => { if (!$('#shelf').hidden) renderShelf(); };
+const samePos = (a, b) => !!(a && b && a.c === b.c && a.p === b.p);
+const Sync = {
+  on: false, ready: false, col: null, assets: null, chains: new Map(), timers: new Map(),
+  async init() {
+    if (!(window.claude && typeof window.claude.use === 'function')) return;
+    setChip('connecting');
+    const get = n => window.claude.use(n).catch(() => null);
+    const [db, user, assets] = await Promise.all([get('db'), get('user'), get('assets')]);
+    const uid = user ? await user.id() : null;
+    if (!db || !uid || !assets) { setChip('local'); return; }
+    this.assets = assets;
+    try { this.col = db.doc(`data/users/${uid}/library`).collection('books'); } catch (e) { setChip('local'); return; }
+    const timer = setTimeout(() => { if (!this.ready) setChip('slow'); }, 10000);
+    this.col.onSnapshot(snap => {
+      const changes = snap.docChanges();
+      if (!snap.metadata.fromCache && !this.ready) {
+        clearTimeout(timer); this.ready = this.on = true; setChip('on');
+        setTimeout(() => this.pushMissing(), 0);
+      }
+      mergeRemote(changes);
+    }, err => { clearTimeout(timer); this.on = false; setChip('local'); console.warn('sync', err); });
+  },
+  enqueue(id, fn) { /* one write at a time per book */
+    const run = (this.chains.get(id) || Promise.resolve()).then(fn);
+    this.chains.set(id, run.catch(() => {}));
+    return run;
+  },
+  docOf(m) {
+    return { title: m.title, author: m.author || '', format: m.format, addedAt: m.addedAt, lens: m.lens,
+      chTitles: m.chTitles.map(t => String(t).slice(0, 40)), asset: m.asset,
+      progress: m.progress, percent: m.percent || 0, lastRead: m.lastRead || 0, updatedAt: m.updatedAt || Date.now(),
+      device: DEVICE_ID, deviceName: DEVICE_NAME };
+  },
+  async pushBook(m) {
+    if (!this.on || m.localOnly || m.synced || m.pushing) return;
+    const content = await DB.get('content', m.id); if (!content) return;
+    m.pushing = true;
+    try {
+      const blob = new Blob([JSON.stringify(content.chapters)], { type: 'application/json' });
+      const up = await this.assets.upload(blob, { type: 'application/json' });
+      m.asset = up.id; m.updatedAt = m.updatedAt || Date.now();
+      await this.enqueue(m.id, () => this.col.doc(m.id).set(this.docOf(m)));
+      m.synced = true; m.pushedAt = m.updatedAt; DB.put('meta', m); renderShelfIfVisible();
+    } catch (e) {
+      console.warn('sync upload', e);
+      if (e && e.code === 'too_large') { m.localOnly = true; DB.put('meta', m); toast(`《${m.title}》超过 20MB，只保存在这台设备上`, 5000); }
+      else if (e && e.code === 'quota_or_state') toast('云端空间已满，这本书只保存在这台设备上', 5000);
+    } finally { m.pushing = false; }
+  },
+  async pushMissing() { for (const m of [...S.books]) if (!m.synced && !m.localOnly && !m.remoteOnly) await this.pushBook(m); },
+  schedule(m) { /* throttle progress writes while reading/listening */
+    if (!this.on || !m || !m.synced || this.timers.has(m.id)) return;
+    this.timers.set(m.id, setTimeout(() => this.flush(m), 8000));
+  },
+  flush(m) {
+    if (!m) return;
+    clearTimeout(this.timers.get(m.id)); this.timers.delete(m.id);
+    if (!this.on || !m.synced || m.pushedAt === m.updatedAt) return;
+    const at = m.updatedAt;
+    this.enqueue(m.id, () => this.col.doc(m.id).update({ progress: { ...m.progress }, percent: m.percent || 0, lastRead: m.lastRead || 0, updatedAt: at, device: DEVICE_ID, deviceName: DEVICE_NAME }))
+      .then(() => { m.pushedAt = at; }).catch(e => console.warn('sync progress', e));
+  },
+  remove(m) {
+    if (!this.on || !m.synced) return;
+    this.enqueue(m.id, () => this.col.doc(m.id).delete()).catch(() => {});
+    if (m.asset) this.assets.delete(m.asset).catch(() => {});
+  }
+};
+function mergeRemote(changes) {
+  let dirty = false;
+  for (const ch of changes) {
+    const id = ch.doc.id; const i = S.books.findIndex(b => b.id === id); const m = S.books[i];
+    if (ch.type === 'removed') {
+      if (m && m.synced && !(S.book && S.book.id === id)) { S.books.splice(i, 1); DB.del('meta', id); DB.del('content', id); dirty = true; }
+      continue;
+    }
+    const r = ch.doc.data(); if (!r) continue;
+    if (!m) {
+      const nm = { id, title: r.title || '未命名', author: r.author || '', format: r.format || 'txt', addedAt: r.addedAt || Date.now(),
+        lastRead: r.lastRead || 0, progress: { c: 0, p: 0, s: 0, ...(r.progress || {}) }, percent: r.percent || 0,
+        lens: [...(r.lens || [])], chTitles: [...(r.chTitles || [])], asset: r.asset, synced: true, remoteOnly: true,
+        updatedAt: r.updatedAt || 0, pushedAt: r.updatedAt || 0 };
+      S.books.push(nm); DB.put('meta', nm); dirty = true; continue;
+    }
+    m.synced = true; if (r.asset) m.asset = r.asset;
+    if ((r.updatedAt || 0) > (m.updatedAt || 0) && r.progress) {
+      if (S.book && S.book.id === id) {
+        if (r.device !== DEVICE_ID && !samePos(r.progress, S.pos)) offerJump(m, r);
+      } else {
+        Object.assign(m, { progress: { c: 0, p: 0, s: 0, ...r.progress }, percent: r.percent || 0, lastRead: r.lastRead || m.lastRead, updatedAt: r.updatedAt, pushedAt: r.updatedAt });
+        DB.put('meta', m); dirty = true;
+      }
+    }
+  }
+  if (dirty) renderShelfIfVisible();
+}
+let pendingJump = null;
+function offerJump(m, r) {
+  pendingJump = { c: r.progress.c || 0, p: r.progress.p || 0, s: r.progress.s || 0 };
+  $('#syncBarText').textContent = `${r.deviceName || '另一台设备'}上读到了「${m.chTitles[pendingJump.c] || ''}」第 ${pendingJump.p + 1} 段`;
+  $('#syncBar').hidden = false;
+}
+
+/* ---------- books ---------- */
+function percentOf(meta, pos, content) {
+  const total = meta.lens.reduce((a, b) => a + b, 0) || 1;
+  let done = meta.lens.slice(0, pos.c).reduce((a, b) => a + b, 0);
+  const ch = content && content.chapters[pos.c];
+  if (ch) for (let i = 0; i < pos.p && i < ch.paras.length; i++) done += ch.paras[i].length;
+  return Math.min(100, done / total * 100);
+}
+async function addBook(b, fmt, extra) {
+  const id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const meta = { id, title: b.title, author: b.author || '', format: fmt, addedAt: Date.now(), lastRead: 0,
+    progress: { c: 0, p: 0, s: 0 }, percent: 0,
+    lens: b.chapters.map(c => c.paras.reduce((a, p) => a + p.length, 0)),
+    chTitles: b.chapters.map(c => c.title), ...(extra || {}) };
+  await DB.put('content', { id, chapters: b.chapters });
+  await DB.put('meta', meta);
+  S.books.push(meta);
+  if (!meta.localOnly) Sync.pushBook(meta);
+  return meta;
+}
+async function importFiles(files) {
+  let added = 0;
+  for (const f of files) {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    if (!['txt', 'epub'].includes(ext)) { toast(`「${f.name}」不是 TXT 或 EPUB，已跳过`); continue; }
+    toast(`正在导入「${f.name}」…`, 0);
+    try {
+      let b;
+      if (ext === 'txt') b = { title: f.name.replace(/\.txt$/i, ''), author: '', chapters: parseTxt(decodeText(await f.arrayBuffer())) };
+      else b = await parseEpub(f);
+      if (!b.chapters.length) throw new Error('文件里没有文字');
+      await addBook(b, ext); added++;
+      toast(`已放上书架：《${b.title}》，共 ${b.chapters.length} 章`);
+    } catch (e) { console.error(e); toast(`无法导入「${f.name}」：${e.message || e}`, 5000); }
+  }
+  if (added) renderShelf();
+}
+
+/* ---------- shelf ---------- */
+function coverHTML(b) {
+  return `<span class="cv-title">${esc(b.title)}</span><span class="cv-rule"></span><span class="cv-author">${esc(b.author || '佚名')}</span><span class="cv-fmt">${fmtLabel(b)}</span>`;
+}
+function renderShelf() {
+  const list = [...S.books].sort((a, b) => (b.lastRead || b.addedAt) - (a.lastRead || a.addedAt));
+  $('#count').textContent = list.length ? `${list.length} 本` : '';
+  const last = list.find(b => b.lastRead);
+  const cont = $('#cont');
+  if (last) {
+    const ch = last.chTitles[last.progress.c] || '';
+    cont.innerHTML = `<div class="cont">
+      <div class="mini"><div class="cover" style="--c:${coverColor(last.title)}">${coverHTML(last)}</div></div>
+      <div class="cont-info"><div class="eyebrow">继续阅读</div><h3>${esc(last.title)}</h3>
+        <div class="where">${esc(ch)} · 已读 ${last.percent.toFixed(1)}%</div>
+        <div class="bar"><i style="width:${last.percent.toFixed(1)}%"></i></div></div>
+      <div class="cont-actions"><button class="btn" data-open="${last.id}">接着看</button><button class="btn primary" data-listen="${last.id}">接着听</button></div></div>`;
+  } else cont.innerHTML = '';
+  const grid = $('#grid');
+  grid.innerHTML = list.map(b => `<div class="book">
+      <button class="cover" style="--c:${coverColor(b.title)}" data-open="${b.id}" aria-label="打开《${esc(b.title)}》">${coverHTML(b)}</button>
+      <div class="b-meta"><div class="b-title" title="${esc(b.title)}">${esc(b.title)}</div>
+        <div class="b-sub">${b.remoteOnly ? '在云端 · 点开即下载' : (b.lastRead ? `已读 ${b.percent.toFixed(1)}%` : '未开始')} · ${b.chTitles.length} 章</div>
+        <div class="bar"><i style="width:${b.percent.toFixed(1)}%"></i></div></div>
+      <button class="b-del" data-del="${b.id}">移除</button></div>`).join('')
+    + `<div class="book"><button class="add-tile" id="addTile"><span class="plus">＋</span>导入书籍<small>TXT · EPUB<br>也可以直接拖进来</small></button></div>`;
+}
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-open],[data-listen],[data-del],#addTile');
+  if (!t) return;
+  if (t.id === 'addTile') return $('#fileIn').click();
+  if (t.dataset.open) return openBook(t.dataset.open);
+  if (t.dataset.listen) { primeSpeech(); if (await openBook(t.dataset.listen)) startPlayback(); return; }
+  if (t.dataset.del) {
+    if (!t.classList.contains('armed')) {
+      t.classList.add('armed'); t.textContent = '确认移除';
+      setTimeout(() => { t.classList.remove('armed'); t.textContent = '移除'; }, 3000); return;
+    }
+    const id = t.dataset.del; const b = S.books.find(x => x.id === id);
+    if (b) Sync.remove(b);
+    await DB.del('content', id); await DB.del('meta', id);
+    S.books = S.books.filter(x => x.id !== id);
+    renderShelf(); toast(`已从书架移除《${b ? b.title : ''}》`);
+  }
+});
+$('#importBtn').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = e => { importFiles([...e.target.files]); e.target.value = ''; };
+const shelf = $('#shelf'); let dragDepth = 0;
+shelf.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; shelf.classList.add('dragging'); });
+shelf.addEventListener('dragover', e => e.preventDefault());
+shelf.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; shelf.classList.remove('dragging'); } });
+shelf.addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; shelf.classList.remove('dragging'); importFiles([...(e.dataTransfer?.files || [])]); });
+
+/* ---------- reader ---------- */
+const scroller = $('#scroller'), article = $('#article');
+function applyType() {
+  document.documentElement.style.setProperty('--fs', prefs.fs + 'px');
+  article.classList.toggle('sans', !prefs.serif);
+  $('#fontFam').textContent = prefs.serif ? '宋体' : '黑体';
+}
+function setToc(on) {
+  prefs.toc = on; savePrefs();
+  $('#reader').classList.toggle('toc-off', !on);
+  $('#tocBtn').setAttribute('aria-pressed', on);
+}
+async function openBook(id) {
+  const meta = S.books.find(b => b.id === id); if (!meta) return false;
+  let content = await DB.get('content', id);
+  if (!content && meta.asset) {
+    toast(`正在从云端取回《${meta.title}》…`, 0);
+    try {
+      const r = await fetch('/_blob/' + meta.asset);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      content = { id, chapters: await r.json() };
+      await DB.put('content', content);
+      meta.remoteOnly = false; DB.put('meta', meta);
+      toast(`《${meta.title}》已下载到这台设备`);
+    } catch (e) { console.warn(e); toast('没能从云端取回这本书，请检查网络后再试', 5000); return false; }
+  }
+  if (!content) { toast('这本书的内容找不到了，请重新导入'); return false; }
+  stopPlayback();
+  $('#syncBar').hidden = true; pendingJump = null;
+  S.book = meta; S.content = content; S.rc = -1;
+  S.pos = { ...meta.progress };
+  if (S.pos.c >= content.chapters.length) S.pos = { c: 0, p: 0, s: 0 };
+  $('#shelf').hidden = true; $('#reader').hidden = false;
+  $('#rBook').textContent = meta.title;
+  setToc(window.innerWidth > 820 ? prefs.toc !== false : false);
+  renderToc();
+  showChapter(S.pos.c);
+  scrollToPara(S.pos.p, false);
+  markCursor();
+  meta.lastRead = Date.now(); DB.put('meta', meta);
+  updatePlayUI();
+  return true;
+}
+function backToShelf() {
+  stopPlayback(); flushSave(); Sync.flush(S.book);
+  $('#hereBtn').hidden = true; $('#syncBar').hidden = true;
+  $('#reader').hidden = true; $('#shelf').hidden = false;
+  S.book = null; S.content = null; renderShelf();
+}
+function renderToc() {
+  const chs = S.content.chapters;
+  $('#tocCount').textContent = `${chs.length} 章`;
+  $('#tocList').innerHTML = chs.map((c, i) => `<li><button data-c="${i}">${esc(c.title)}</button></li>`).join('');
+}
+function updateTocActive() {
+  const list = $('#tocList');
+  list.querySelectorAll('button.on').forEach(b => b.classList.remove('on'));
+  const b = list.querySelector(`button[data-c="${S.rc}"]`);
+  if (b) { b.classList.add('on'); const tr = $('#toc').getBoundingClientRect(), br = b.getBoundingClientRect();
+    if (br.top < tr.top + 40 || br.bottom > tr.bottom - 60) b.scrollIntoView({ block: 'center' }); }
+}
+const norm = s => s.replace(/[\s　]+/g, '');
+function showChapter(c) {
+  const ch = S.content.chapters[c];
+  S.rc = c; S.sents = ch.paras.map(splitSentences); S.hlEls = [];
+  const hs = new Set(ch.heads || []);
+  const firstIsTitle = ch.paras.length && norm(ch.paras[0]) === norm(ch.title);
+  let html = firstIsTitle ? '' : `<h2 class="ch-title">${esc(ch.title)}</h2>`;
+  ch.paras.forEach((p, i) => {
+    const isT = i === 0 && firstIsTitle; const tag = isT ? 'h2' : 'p';
+    const cls = isT ? 'ch-title' : (hs.has(i) ? 'sub' : '');
+    html += `<${tag} class="para ${cls}" data-p="${i}">${S.sents[i].map((s, j) => `<span class="s" data-s="${j}">${esc(s)}</span>`).join('')}</${tag}>`;
+  });
+  const n = S.content.chapters.length;
+  html += `<div class="ch-nav">${c > 0 ? `<button class="btn" data-go="${c - 1}">上一章</button>` : ''}${c + 1 < n ? `<button class="btn primary" data-go="${c + 1}">下一章</button>` : '<span style="color:var(--ink-3)">全书完</span>'}</div>`;
+  article.innerHTML = html;
+  S.paraEls = [...article.querySelectorAll('.para')];
+  scroller.scrollTop = 0;
+  $('#rChap').textContent = ch.title;
+  updateTocActive(); updatePosText();
+}
+function scrollToPara(p, smooth) {
+  const el = S.paraEls[p]; if (!el || p === 0) { scroller.scrollTop = 0; return; }
+  S.progAt = Date.now();
+  scroller.scrollTo({ top: el.offsetTop - 40, behavior: smooth ? 'smooth' : 'auto' });
+}
+function clearHL() { S.hlEls.forEach(e => e.classList.remove('cur')); S.hlEls = []; }
+function highlight(p, s, whole) {
+  clearHL();
+  const pe = S.paraEls[p]; if (!pe) return;
+  const els = whole ? [...pe.children] : [pe.children[s]].filter(Boolean);
+  els.forEach(e => e.classList.add('cur')); S.hlEls = els;
+  if (S.follow && els[0]) ensureVisible(els[0]);
+}
+function markCursor() { /* 暂停时也标出朗读起点 */
+  if (S.rc !== S.pos.c) return;
+  highlight(S.pos.p, S.pos.s, false);
+}
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function ensureVisible(el) {
+  const r = el.getBoundingClientRect(), cr = scroller.getBoundingClientRect();
+  if (r.top < cr.top + cr.height * 0.15 || r.bottom > cr.top + cr.height * 0.72) {
+    S.progAt = Date.now();
+    scroller.scrollTo({ top: scroller.scrollTop + r.top - cr.top - cr.height * 0.3, behavior: reduced ? 'auto' : 'smooth' });
+  }
+}
+/* user scroll detection */
+['wheel', 'touchstart', 'mousedown'].forEach(ev => scroller.addEventListener(ev, () => { S.userAt = Date.now(); }, { passive: true }));
+scroller.addEventListener('keydown', () => { S.userAt = Date.now(); });
+let scrollT;
+scroller.addEventListener('scroll', () => {
+  if (Date.now() - S.userAt > 1200) return;
+  if (S.playing) { if (S.follow) { S.follow = false; $('#locateBtn').hidden = false; } return; }
+  clearTimeout(scrollT); scrollT = setTimeout(posFromScroll, 250);
+}, { passive: true });
+function posFromScroll() {
+  if (!S.content || S.playing) return;
+  const top = scroller.getBoundingClientRect().top + 12;
+  let p = 0;
+  for (let i = 0; i < S.paraEls.length; i++) { if (S.paraEls[i].getBoundingClientRect().bottom > top) { p = i; break; } p = i; }
+  if (S.pos.c === S.rc && S.pos.p === p) return;
+  S.pos = { c: S.rc, p, s: 0 };
+  markCursorNoScroll(); saveProgress();
+}
+function markCursorNoScroll() { const f = S.follow; S.follow = false; markCursor(); S.follow = f; }
+$('#locateBtn').onclick = () => { S.follow = true; $('#locateBtn').hidden = true; if (S.hlEls[0]) ensureVisible(S.hlEls[0]); };
+
+article.addEventListener('dblclick', e => {
+  if (lastPointer === 'touch') return;
+  const s = e.target.closest('.s'); if (!s) return;
+  const p = +s.parentElement.dataset.p, si = +s.dataset.s;
+  window.getSelection()?.removeAllRanges();
+  primeSpeech();
+  startPlayback({ c: S.rc, p, s: si });
+});
+/* 手机：轻点一句，弹出「从这里读」 */
+let lastPointer = 'mouse';
+article.addEventListener('pointerdown', e => { lastPointer = e.pointerType; }, { passive: true });
+const hereBtn = $('#hereBtn');
+const hideHere = () => { hereBtn.hidden = true; };
+article.addEventListener('click', e => {
+  if (lastPointer !== 'touch' || e.target.closest('[data-go]')) return;
+  const s = e.target.closest('.s'); if (!s) { hideHere(); return; }
+  const rect = s.getClientRects()[0] || s.getBoundingClientRect();
+  hereBtn.hidden = false;
+  const bw = hereBtn.offsetWidth, vw = window.innerWidth;
+  const x = Math.min(Math.max(12, rect.left + rect.width / 2 - bw / 2), vw - bw - 12);
+  let y = rect.top - 48; if (y < 70) y = rect.bottom + 10;
+  hereBtn.style.left = x + 'px'; hereBtn.style.top = y + 'px';
+  hereBtn.dataset.p = s.parentElement.dataset.p; hereBtn.dataset.s = s.dataset.s;
+});
+hereBtn.onclick = () => { primeSpeech(); hideHere(); startPlayback({ c: S.rc, p: +hereBtn.dataset.p, s: +hereBtn.dataset.s }); };
+scroller.addEventListener('scroll', hideHere, { passive: true });
+$('#tocBack').onclick = () => setToc(false);
+$('#setBtn').onclick = () => { const open = $('#player').classList.toggle('set-open'); $('#setBtn').setAttribute('aria-expanded', open); };
+$('#syncJump').onclick = () => {
+  const p = pendingJump; $('#syncBar').hidden = true; pendingJump = null;
+  if (!p || !S.content || p.c >= S.content.chapters.length) return;
+  if (S.playing) { startPlayback(p); return; }
+  S.pos = { ...p }; if (S.rc !== p.c) showChapter(p.c);
+  scrollToPara(p.p, true); markCursorNoScroll(); saveProgress();
+};
+$('#syncIgnore').onclick = () => { $('#syncBar').hidden = true; pendingJump = null; };
+article.addEventListener('click', e => {
+  const g = e.target.closest('[data-go]'); if (!g) return;
+  gotoChapter(+g.dataset.go);
+});
+$('#tocList').addEventListener('click', e => {
+  const b = e.target.closest('button[data-c]'); if (!b) return;
+  gotoChapter(+b.dataset.c);
+  if (window.innerWidth <= 820) setToc(false);
+});
+function gotoChapter(c) {
+  const was = S.playing;
+  S.pos = { c, p: 0, s: 0 };
+  if (was) { startPlayback(); return; }
+  showChapter(c); markCursorNoScroll(); saveProgress();
+}
+function stepPara(d) {
+  if (!S.content) return;
+  let { c, p } = S.pos; const chs = S.content.chapters;
+  p += d;
+  if (p < 0) { if (c > 0) { c--; p = chs[c].paras.length - 1; } else p = 0; }
+  else if (p >= chs[c].paras.length) { if (c + 1 < chs.length) { c++; p = 0; } else p = chs[c].paras.length - 1; }
+  S.pos = { c, p, s: 0 };
+  if (S.playing) { startPlayback(); return; }
+  if (S.rc !== c) showChapter(c);
+  S.follow = true; markCursor(); saveProgress();
+}
+
+/* ---------- progress ---------- */
+let saveT;
+function saveProgress() { updatePosText(); clearTimeout(saveT); saveT = setTimeout(flushSave, 700); }
+function flushSave() {
+  clearTimeout(saveT);
+  const m = S.book; if (!m) return;
+  const same = m.progress && m.progress.c === S.pos.c && m.progress.p === S.pos.p && m.progress.s === S.pos.s;
+  m.lastRead = Date.now();
+  if (!same) {
+    m.progress = { ...S.pos }; m.percent = percentOf(m, S.pos, S.content); m.updatedAt = Date.now();
+    Sync.schedule(m);
+  }
+  DB.put('meta', m);
+}
+function updatePosText() {
+  if (!S.book) return;
+  const pct = percentOf(S.book, S.pos, S.content);
+  const t = S.content.chapters[S.pos.c]?.title || '';
+  $('#plPos').textContent = `${t} · 第 ${S.pos.p + 1} 段 · 全书 ${pct.toFixed(1)}%`;
+}
+
+/* ---------- voices ---------- */
+const CLAUDE_VOICES = [['buttery', '柔和'], ['airy', '轻盈'], ['glassy', '清亮'], ['rounded', '圆润']];
+/* 已知中文音色：男声优先（低沉有磁性的排最前） */
+const KNOWN = [
+  [/Yunjian|云健/i, '云健 · 低沉男声'], [/Yunyang|云扬/i, '云扬 · 沉稳男声'], [/Yunxi\b|云希/i, '云希 · 青年男声'],
+  [/Yunze|云泽/i, '云泽 · 浑厚男声'], [/Yunye|云野/i, '云野 · 男声'], [/Li-?mu|李慕/i, '李慕 · 男声'],
+  [/Xiaoxiao|晓晓/i, '晓晓 · 女声'], [/Xiaoyi|晓伊/i, '晓伊 · 女声'], [/Yunxia|云夏/i, '云夏 · 童声']
+];
+const known = v => KNOWN.findIndex(([re]) => re.test(v.name));
+const isMale = v => { const k = known(v); return k >= 0 && k <= 5; };
+const vScore = v => (/(Natural|Online|Neural|Premium|Enhanced)/i.test(v.name) ? 8 : 0) + (isMale(v) ? 6 - known(v) : 0) + (/Google/i.test(v.name) ? 2 : 0) + (/zh[-_]CN/i.test(v.lang) ? 1 : 0);
+function loadVoices() {
+  let all = [];
+  try { all = window.speechSynthesis ? speechSynthesis.getVoices() : []; } catch (e) {}
+  S.voices = all.filter(v => /^(zh|cmn|yue)/i.test(v.lang)).sort((a, b) => vScore(b) - vScore(a));
+  renderVoiceSelect();
+}
+const vLabel = v => { const k = known(v); if (k >= 0) return KNOWN[k][1] + (/(Natural|Online|Neural|Premium|Enhanced)/i.test(v.name) ? '（自然）' : '') + (/(TW|HK)/i.test(v.lang) ? ` · ${v.lang}` : '') + (/liaoning|shaanxi/i.test(v.name) ? ' · 方言' : ''); return vLabel0(v); };
+const vLabel0 = v => v.name.replace(/^Microsoft\s+/i, '').replace(/\s*Online\s*\(Natural\)\s*/i, '（自然）').replace(/\s+-\s+.*$/, '') + (/(TW|HK)/i.test(v.lang) ? ` · ${v.lang}` : '');
+function renderVoiceSelect() {
+  const sel = $('#voiceSel'); let html = '';
+  if (window.speechSynthesis) {
+    html += '<optgroup label="浏览器语音（免费）">';
+    html += S.voices.length ? S.voices.map(v => `<option value="b:${esc(v.voiceURI)}">${esc(vLabel(v))}</option>`).join('') : '<option value="b:">系统默认中文</option>';
+    html += '</optgroup>';
+  }
+  if (S.tts) html += '<optgroup label="Claude 语音">' + CLAUDE_VOICES.map(([k, n]) => `<option value="c:${k}">Claude · ${n}</option>`).join('') + '</optgroup>';
+  sel.innerHTML = html;
+  const vals = [...sel.options].map(o => o.value);
+  sel.value = vals.includes(prefs.voice) ? prefs.voice : (vals[0] || '');
+  updateHint();
+}
+function updateHint() {
+  const natural = S.voices.some(v => /(Natural|Online|Neural)/i.test(v.name));
+  $('#tocFoot').innerHTML = (TOUCH ? '轻点正文任意一句，再点「从这里读」，就从那一句开始朗读。' : '双击正文任意一句，从那里开始朗读。空格键：播放 / 暂停。') +
+    (natural ? '' : '<br><br>想要更自然的声音：用 Microsoft Edge 打开本页，可选「云健」「云扬」等低沉的男声自然语音。');
+}
+$('#voiceSel').onchange = e => { prefs.voice = e.target.value; savePrefs(); if (S.playing) startPlayback(); };
+$('#rate').value = prefs.rate; $('#rateOut').textContent = (+prefs.rate).toFixed(1) + '×';
+$('#rate').oninput = e => { $('#rateOut').textContent = (+e.target.value).toFixed(1) + '×'; };
+$('#rate').onchange = e => {
+  prefs.rate = +e.target.value; savePrefs();
+  if (!S.playing) return;
+  if (S.claudeActive && S.tts) { try { S.tts.setRate(prefs.rate); } catch (err) {} } else startPlayback();
+};
+if (window.speechSynthesis) { speechSynthesis.onvoiceschanged = loadVoices; }
+loadVoices(); setTimeout(loadVoices, 700); setTimeout(loadVoices, 2000);
+
+/* ---------- playback ---------- */
+const isClaude = () => $('#voiceSel').value.startsWith('c:') && S.tts;
+function startPlayback(from) {
+  if (!S.content) return;
+  if (from) S.pos = { ...from };
+  stopPlayback(true);
+  const g = ++S.gen; S.playing = true; S.follow = true; S.fails = 0;
+  $('#locateBtn').hidden = true; updatePlayUI(); wake(true);
+  if (isClaude()) runClaude(g); else runBrowser(g);
+}
+function stopPlayback(silent) {
+  S.gen++; S.playing = false;
+  try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) {}
+  if (S.claudeActive && S.tts) { S.claudeActive = false; try { S.tts.stop(); } catch (e) {} }
+  if (!silent) { updatePlayUI(); wake(false); $('#locateBtn').hidden = true; if (S.book) { flushSave(); Sync.flush(S.book); } }
+}
+function primeSpeech() { /* iOS 需要在点击时先“解锁”语音 */
+  try { if (window.speechSynthesis && !S.primed) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); S.primed = true; } } catch (e) {}
+}
+function finishBook() { stopPlayback(); clearHL(); toast('全书读完了'); }
+function nextPosAfterChapter(c) {
+  if (c + 1 < S.content.chapters.length) { S.pos = { c: c + 1, p: 0, s: 0 }; return true; }
+  return false;
+}
+function speakBrowser(text) {
+  return new Promise(res => {
+    const u = new SpeechSynthesisUtterance(text);
+    const key = $('#voiceSel').value.slice(2);
+    const v = S.voices.find(x => x.voiceURI === key);
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'zh-CN';
+    u.rate = prefs.rate;
+    let done = false; const t0 = Date.now();
+    const fin = ok => { if (done) return; done = true; clearTimeout(wd); res(ok); };
+    u.onend = () => fin(Date.now() - t0 > 30 || text.length < 2);
+    u.onerror = ev => fin(ev.error === 'interrupted' || ev.error === 'canceled');
+    S.utt = u;
+    const wd = setTimeout(() => fin(true), 8000 + text.length * 400 / prefs.rate);
+    speechSynthesis.speak(u);
+  });
+}
+async function runBrowser(g) {
+  if (!window.speechSynthesis) { stopPlayback(); toast('这个浏览器不支持语音朗读，请换用 Edge 或 Chrome'); return; }
+  await sleep(80);
+  while (g === S.gen) {
+    const pos = S.pos;
+    if (S.rc !== pos.c) showChapter(pos.c);
+    if (pos.p >= S.sents.length) { if (nextPosAfterChapter(pos.c)) continue; finishBook(); return; }
+    if (pos.s >= S.sents[pos.p].length) { S.pos = { c: pos.c, p: pos.p + 1, s: 0 }; continue; }
+    const text = S.sents[pos.p][pos.s];
+    highlight(pos.p, pos.s, false); saveProgress();
+    if (HAS_WORD.test(text)) {
+      const ok = await speakBrowser(text.trim());
+      if (g !== S.gen) return;
+      if (!ok) { if (++S.fails >= 3) { stopPlayback(); toast('浏览器语音无法播放。请换一个声音，或用 Edge / Chrome 打开本页'); return; } }
+      else S.fails = 0;
+    }
+    if (g !== S.gen) return;
+    S.pos = { c: pos.c, p: pos.p, s: pos.s + 1 };
+  }
+}
+function onClaudeLine({ id }) {
+  if (!id) return;
+  const [gg, c, p] = id.split('|').map(Number);
+  if (gg !== S.gen || c !== S.rc) return;
+  S.pos = { c, p, s: 0 };
+  highlight(p, 0, true); saveProgress();
+}
+function claudeErr(e) {
+  const code = e && e.code;
+  if (code === 'not_granted') { S.tts = null; renderVoiceSelect(); return 'Claude 语音已被关闭，已切回浏览器语音'; }
+  if (code === 'rate_limited') return 'Claude 语音暂时用得太频繁，请稍等一会儿再播放';
+  if (code === 'busy') return 'Claude 语音正忙，请稍后再试';
+  return `Claude 语音出错了（${code || (e && e.message) || '未知原因'}），可以先换成浏览器语音`;
+}
+async function runClaude(g) {
+  const t = S.tts; S.claudeActive = true;
+  while (g === S.gen) {
+    const pos = S.pos;
+    if (S.rc !== pos.c) showChapter(pos.c);
+    if (pos.p >= S.sents.length) { if (nextPosAfterChapter(pos.c)) continue; finishBook(); return; }
+    const voice = $('#voiceSel').value.slice(2);
+    const lines = []; let p = pos.p, chars = 0;
+    for (; p < S.sents.length && lines.length < 20 && chars < 5000; p++) {
+      const txt = (p === pos.p ? S.sents[p].slice(pos.s) : S.sents[p]).join('').trim();
+      if (!HAS_WORD.test(txt)) continue;
+      chunkText(txt, 1800).forEach(x => lines.push({ text: x, voice, rate: prefs.rate, id: `${g}|${pos.c}|${p}` }));
+      chars += txt.length;
+    }
+    if (!lines.length) { S.pos = { c: pos.c, p, s: 0 }; continue; }
+    highlight(pos.p, 0, true);
+    try { await t.speak(lines); }
+    catch (e) { if (g !== S.gen) return; S.claudeActive = false; stopPlayback(); toast(claudeErr(e), 5000); return; }
+    if (g !== S.gen) return;
+    S.pos = { c: pos.c, p, s: 0 };
+  }
+}
+function updatePlayUI() {
+  const pl = $('#player'); pl.classList.toggle('playing', S.playing);
+  $('#icPlay').hidden = S.playing; $('#icPause').hidden = !S.playing;
+  $('#playBtn').setAttribute('aria-label', S.playing ? '暂停' : '播放');
+  $('#plStateText').textContent = S.playing ? '正在朗读' : (TOUCH ? '已暂停 · 点播放键开始' : '已暂停 · 按空格或播放键开始');
+  updatePosText();
+}
+async function wake(on) {
+  try {
+    if (on && !S.wl && navigator.wakeLock) S.wl = await navigator.wakeLock.request('screen');
+    else if (!on && S.wl) { await S.wl.release(); S.wl = null; }
+  } catch (e) { S.wl = null; }
+}
+$('#playBtn').onclick = () => { if (S.playing) { stopPlayback(); markCursorNoScroll(); } else { primeSpeech(); startPlayback(); } };
+$('#prevBtn').onclick = () => stepPara(-1);
+$('#nextBtn').onclick = () => stepPara(1);
+$('#backBtn').onclick = backToShelf;
+$('#tocBtn').onclick = () => setToc($('#reader').classList.contains('toc-off'));
+$('#fontUp').onclick = () => { prefs.fs = Math.min(28, prefs.fs + 1); savePrefs(); applyType(); };
+$('#fontDown').onclick = () => { prefs.fs = Math.max(14, prefs.fs - 1); savePrefs(); applyType(); };
+$('#fontFam').onclick = () => { prefs.serif = !prefs.serif; savePrefs(); applyType(); };
+document.addEventListener('keydown', e => {
+  if ($('#reader').hidden) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (['input', 'select', 'textarea'].includes(tag)) return;
+  if (e.code === 'Space' && !e.repeat) { e.preventDefault(); $('#playBtn').click(); }
+  else if (e.key === 'Escape' && window.innerWidth <= 820) setToc(false);
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.playing && !S.wl) wake(true);
+  if (document.visibilityState === 'hidden') { flushSave(); Sync.flush(S.book); }
+});
+window.addEventListener('pagehide', () => { flushSave(); Sync.flush(S.book); });
+
+/* ---------- Claude voice (optional) ---------- */
+if (window.claude && typeof window.claude.use === 'function') {
+  window.claude.use('tts').then(t => {
+    if (!t) return;
+    S.tts = t;
+    try { t.onLine(onClaudeLine); } catch (e) {}
+    try { t.onState(({ state, reason }) => {
+      if (state === 'idle' && reason === 'viewer_stopped' && S.claudeActive) { S.gen++; S.claudeActive = false; S.playing = false; updatePlayUI(); }
+    }); } catch (e) {}
+    renderVoiceSelect();
+  }).catch(() => {});
+}
+
+/* ---------- boot ---------- */
+(async () => {
+  applyType();
+  await DB.open();
+  S.books = (await DB.all('meta')) || [];
+  let seeded = false;
+  try { seeded = localStorage.getItem('jingting-seeded') === '1'; } catch (e) {}
+  if (!S.books.length && !seeded) {
+    await addBook(GUIDE, 'txt', { sample: true, localOnly: true });
+    try { localStorage.setItem('jingting-seeded', '1'); } catch (e) {}
+  }
+  renderShelf();
+  Sync.init();
+  if (!DB.ok) toast('这个浏览器不允许本地保存，刷新后书架会清空', 6000);
+})();
+})();
+</script>
+
+</body>
+</html>
