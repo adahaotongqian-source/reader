@@ -231,15 +231,30 @@ const KokoroZh = (() => {
 
   /* ---------- model ---------- */
   let session = null, loading = null; const voiceCache = new Map();
+  const CHUNK = 48 * 1024 * 1024;
+  async function cacheRead(cache, url) {
+    const meta = await cache.match(url + '?part=meta'); if (!meta) return null;
+    const { n, size } = await meta.json(); const buf = new Uint8Array(size); let o = 0;
+    for (let i = 0; i < n; i++) { const r = await cache.match(url + '?part=' + i); if (!r) return null; const b = new Uint8Array(await r.arrayBuffer()); buf.set(b, o); o += b.length; }
+    return o === size ? buf : null;
+  }
+  async function cacheWrite(cache, url, buf) {
+    try {
+      const n = Math.ceil(buf.length / CHUNK);
+      for (let i = 0; i < n; i++) await cache.put(url + '?part=' + i, new Response(buf.slice(i * CHUNK, (i + 1) * CHUNK)));
+      await cache.put(url + '?part=meta', new Response(JSON.stringify({ n, size: buf.length }), { headers: { 'content-type': 'application/json' } }));
+      try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
+    } catch (e) { try { await cache.delete(url + '?part=meta'); } catch (er) {} }
+  }
   async function cachedFetch(url, onProgress) {
     let cache = null; try { cache = await caches.open(CACHE); } catch (e) {}
-    if (cache) { const hit = await cache.match(url); if (hit) { onProgress && onProgress(1, true); return new Uint8Array(await hit.arrayBuffer()); } }
+    if (cache) { const hit = await cacheRead(cache, url); if (hit) { onProgress && onProgress(1, true); return hit; } }
     const res = await fetch(url); if (!res.ok) throw new Error('下载失败 ' + res.status);
     const total = +res.headers.get('content-length') || 0;
     const reader = res.body.getReader(); const parts = []; let got = 0;
     for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); got += value.length; onProgress && total && onProgress(got / total, false); }
     const buf = new Uint8Array(got); let o = 0; for (const p of parts) { buf.set(p, o); o += p.length; }
-    if (cache) { try { await cache.put(url, new Response(buf, { headers: { 'content-type': 'application/octet-stream' } })); } catch (e) {} }
+    if (cache) await cacheWrite(cache, url, buf);
     return buf;
   }
   const FP32 = REPO + 'onnx/model.onnx';
@@ -252,7 +267,7 @@ const KokoroZh = (() => {
     /* 只用 fp32：fp16 和 int8 版本在实测中输出的是噪音 */
     return plan = { url: FP32, ep: ad ? ['webgpu', 'wasm'] : ['wasm'], mb: 339, gpu: !!ad };
   }
-  async function isCached() { const p = await pickPlan(); try { const c = await caches.open(CACHE); return !!(await c.match(p.url)); } catch (e) { return false; } }
+  async function isCached() { const p = await pickPlan(); try { const c = await caches.open(CACHE); return !!(await c.match(p.url + '?part=meta')); } catch (e) { return false; } }
   function init(onProgress) {
     if (session) return Promise.resolve();
     if (loading) return loading;
