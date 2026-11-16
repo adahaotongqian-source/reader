@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kokoro 试听</title>
+<meta name="description" content="试听 Kokoro 中文 AI 声音，挑出喜欢的男声和女声">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2324466B'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle' fill='white' font-family='serif'%3E听%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.29.4/dist/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.all.min.js"></script>
+<style>
+:root{
+  --bg:#F2F3F1; --surface:#FFFFFF; --ink:#1D2125; --ink-2:#5A6067; --ink-3:#8B9198;
+  --line:#DCDFDC; --accent:#24466B; --accent-soft:#E4EAF1; --on-accent:#FFFFFF; --star:#B07A1E;
+  --f-serif:"Noto Serif SC","Songti SC","STSong",serif;
+  --f-sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#131518; --surface:#1A1D21; --ink:#E3E5E2; --ink-2:#A2A8AE; --ink-3:#6F767D;
+  --line:#2B3036; --accent:#93B2D6; --accent-soft:#1E2A38; --on-accent:#0F1A26; --star:#D9A84E; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#131518; --surface:#1A1D21; --ink:#E3E5E2; --ink-2:#A2A8AE; --ink-3:#6F767D;
+  --line:#2B3036; --accent:#93B2D6; --accent-soft:#1E2A38; --on-accent:#0F1A26; --star:#D9A84E; color-scheme:dark;
+}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:14px;-webkit-font-smoothing:antialiased}
+button,textarea,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:880px;margin:0 auto;padding:36px max(16px,env(safe-area-inset-left,0px)) 80px}
+h1{font-family:var(--f-serif);font-size:26px;font-weight:700;margin:0 0 6px;letter-spacing:.04em}
+.sub{color:var(--ink-2);margin:0 0 26px;line-height:1.7}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 16px}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.bar{flex:1;min-width:160px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+#loadMsg{color:var(--ink-2);font-size:13px}
+textarea{width:100%;min-height:84px;resize:vertical;border:1px solid var(--line);border-radius:6px;background:transparent;padding:10px 12px;font-family:var(--f-serif);font-size:16px;line-height:1.8}
+label.sp{display:flex;align-items:center;gap:8px;color:var(--ink-2);font-size:13px}
+label.sp input{accent-color:var(--accent);width:120px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:8px 0 14px}
+.tab{border:0;background:none;padding:10px 14px;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.v{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.v.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.v .play{flex:1;border:0;background:none;text-align:left;padding:10px 12px;display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+.v .play:hover{background:var(--accent-soft)}
+.v .play svg{flex:none;color:var(--accent)}
+.v .st{border:0;background:none;padding:10px 12px;color:var(--ink-3);font-size:17px;line-height:1}
+.v .st[aria-pressed="true"]{color:var(--star)}
+.v.busy .play{color:var(--ink-3)}
+.fav{display:flex;flex-wrap:wrap;gap:6px;min-height:28px;align-items:center}
+.chip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:13px;background:var(--surface)}
+.muted{color:var(--ink-3);font-size:13px}
+.note{color:var(--ink-3);font-size:12.5px;line-height:1.8;margin-top:24px}
+#copyBtn{margin-left:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Kokoro 中文声音试听</h1>
+  <p class="sub">点一下声音就能听，点 ☆ 收藏喜欢的。挑好后把下方「我的收藏」告诉 Claude，它会把这些声音加进阅读器。</p>
+
+  <div class="card" id="loadCard">
+    <div class="row">
+      <button class="btn primary" id="loadBtn">加载语音模型</button>
+      <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+    </div>
+    <p id="loadMsg" style="margin:10px 0 0">正在检测设备…</p>
+  </div>
+
+  <div class="card">
+    <textarea id="text" aria-label="试听文字">夜深了，窗外的雨还在下。他轻轻合上书，望着远处的灯火，低声说道：“明天，我们就回家吧。”</textarea>
+    <div class="row" style="margin-top:10px">
+      <label class="sp" for="speed">语速 <input type="range" id="speed" min="0.7" max="1.4" step="0.05" value="1"><output id="speedOut">1.00×</output></label>
+      <span class="muted" id="status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row"><b>我的收藏</b><button class="btn" id="copyBtn" disabled>复制收藏列表</button></div>
+    <div class="fav" id="fav" style="margin-top:10px"><span class="muted">还没有收藏</span></div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabM" aria-selected="true">男声 · 45</button>
+    <button class="tab" role="tab" id="tabF" aria-selected="false">女声 · 55</button>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <p class="note">声音模型 Kokoro-82M v1.1-zh（Apache-2.0 开源），在你的浏览器里本机运行：只在第一次下载模型，之后离线可用、不限次数。有显卡加速（WebGPU）的电脑生成很快；没有的话会比较慢，只适合试听。编号是模型自带的，没有名字。</p>
+</div>
+
+<script>
+/* Kokoro v1.1-zh in the browser: Chinese G2P (port of misaki zh frontend, simplified) + onnxruntime-web inference.
+   Needs globals: pinyinPro (pinyin-pro), ort (onnxruntime-web). */
+const KokoroZh = (() => {
+  const REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.1-zh-ONNX/resolve/main/';
+  const MODEL = REPO + 'onnx/model_quantized.onnx';
+  const CACHE = 'kokoro-zh-v1';
+  const SR = 24000;
+  const VOCAB = new Map([["$", 0], [";", 1], [":", 2], [",", 3], [".", 4], ["!", 5], ["?", 6], ["/", 7], ["—", 9], ["…", 10], ["\"", 11], ["(", 12], [")", 13], ["“", 14], ["”", 15], [" ", 16], ["̃", 17], ["ʣ", 18], ["ʥ", 19], ["ʦ", 20], ["ʨ", 21], ["ᵝ", 22], ["ㄓ", 23], ["A", 24], ["I", 25], ["ㄅ", 30], ["O", 31], ["ㄆ", 32], ["Q", 33], ["R", 34], ["S", 35], ["T", 36], ["ㄇ", 37], ["ㄈ", 38], ["W", 39], ["ㄉ", 40], ["Y", 41], ["ᵊ", 42], ["a", 43], ["b", 44], ["c", 45], ["d", 46], ["e", 47], ["f", 48], ["ㄊ", 49], ["h", 50], ["i", 51], ["j", 52], ["k", 53], ["l", 54], ["m", 55], ["n", 56], ["o", 57], ["p", 58], ["q", 59], ["r", 60], ["s", 61], ["t", 62], ["u", 63], ["v", 64], ["w", 65], ["x", 66], ["y", 67], ["z", 68], ["ɑ", 69], ["ɐ", 70], ["ɒ", 71], ["æ", 72], ["ㄋ", 73], ["ㄌ", 74], ["β", 75], ["ɔ", 76], ["ɕ", 77], ["ç", 78], ["ㄍ", 79], ["ɖ", 80], ["ð", 81], ["ʤ", 82], ["ə", 83], ["ㄎ", 84], ["ㄦ", 85], ["ɛ", 86], ["ɜ", 87], ["ㄏ", 88], ["ㄐ", 89], ["ɟ", 90], ["ㄑ", 91], ["ɡ", 92], ["ㄒ", 93], ["ㄔ", 94], ["ㄕ", 95], ["ㄗ", 96], ["ㄘ", 97], ["ㄙ", 98], ["月", 99], ["ㄚ", 100], ["ɨ", 101], ["ɪ", 102], ["ʝ", 103], ["ㄛ", 104], ["ㄝ", 105], ["ㄞ", 106], ["ㄟ", 107], ["ㄠ", 108], ["ㄡ", 109], ["ɯ", 110], ["ɰ", 111], ["ŋ", 112], ["ɳ", 113], ["ɲ", 114], ["ɴ", 115], ["ø", 116], ["ㄢ", 117], ["ɸ", 118], ["θ", 119], ["œ", 120], ["ㄣ", 121], ["ㄤ", 122], ["ɹ", 123], ["ㄥ", 124], ["ɾ", 125], ["ㄖ", 126], ["ㄧ", 127], ["ʁ", 128], ["ɽ", 129], ["ʂ", 130], ["ʃ", 131], ["ʈ", 132], ["ʧ", 133], ["ㄨ", 134], ["ʊ", 135], ["ʋ", 136], ["ㄩ", 137], ["ʌ", 138], ["ɣ", 139], ["ㄜ", 140], ["ㄭ", 141], ["χ", 142], ["ʎ", 143], ["十", 144], ["压", 145], ["言", 146], ["ʒ", 147], ["ʔ", 148], ["阳", 149], ["要", 150], ["阴", 151], ["应", 152], ["用", 153], ["又", 154], ["中", 155], ["ˈ", 156], ["ˌ", 157], ["ː", 158], ["穵", 159], ["外", 160], ["万", 161], ["ʰ", 162], ["王", 163], ["ʲ", 164], ["为", 165], ["文", 166], ["瓮", 167], ["我", 168], ["3", 169], ["5", 170], ["1", 171], ["2", 172], ["4", 173], ["元", 175], ["云", 176], ["ᵻ", 177]]);
+  const ZH_MAP = {b:'ㄅ',p:'ㄆ',m:'ㄇ',f:'ㄈ',d:'ㄉ',t:'ㄊ',n:'ㄋ',l:'ㄌ',g:'ㄍ',k:'ㄎ',h:'ㄏ',j:'ㄐ',q:'ㄑ',x:'ㄒ',zh:'ㄓ',ch:'ㄔ',sh:'ㄕ',r:'ㄖ',z:'ㄗ',c:'ㄘ',s:'ㄙ',a:'ㄚ',o:'ㄛ',e:'ㄜ',ie:'ㄝ',ai:'ㄞ',ei:'ㄟ',ao:'ㄠ',ou:'ㄡ',an:'ㄢ',en:'ㄣ',ang:'ㄤ',eng:'ㄥ',er:'ㄦ',i:'ㄧ',u:'ㄨ',v:'ㄩ',ii:'ㄭ',iii:'十',ve:'月',ia:'压',ian:'言',iang:'阳',iao:'要',in:'阴',ing:'应',iong:'用',iou:'又',ong:'中',ua:'穵',uai:'外',uan:'万',uang:'王',uei:'为',uen:'文',ueng:'瓮',uo:'我',van:'元',vn:'云',R:'R'};
+  const PUNC = new Set([...';:,.!?—…"()“”']);
+  const NOT_ERHUA = new Set('虐儿 为儿 护儿 瞒儿 救儿 替儿 有儿 一儿 我儿 俺儿 妻儿 拐儿 聋儿 乞儿 患儿 幼儿 孤儿 婴儿 婴幼儿 连体儿 脑瘫儿 流浪儿 体弱儿 混血儿 蜜雪儿 舫儿 祖儿 美儿 应采儿 可儿 侄儿 孙儿 侄孙儿 女儿 男儿 红孩儿 花儿 虫儿 马儿 鸟儿 猪儿 猫儿 狗儿 少儿 儿女 儿子 儿童'.split(' '));
+  const INITIALS = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's'];
+
+  /* ---------- numbers → Chinese ---------- */
+  const DIG = '零一二三四五六七八九';
+  function intToZh(s) {
+    s = s.replace(/^0+(?=\d)/, '');
+    if (s.length > 12) return [...s].map(d => DIG[d]).join('');
+    const n = +s; if (n === 0) return '零';
+    const units = ['', '十', '百', '千'], bigs = ['', '万', '亿'];
+    let out = '', groups = [];
+    let t = n; while (t > 0) { groups.push(t % 10000); t = Math.floor(t / 10000); }
+    let needZero = false;
+    for (let gi = groups.length - 1; gi >= 0; gi--) {
+      const g = groups[gi];
+      if (g === 0) { needZero = out !== ''; continue; }
+      let gs = '', z = false; const ds = String(g).padStart(4, '0');
+      if (out && g < 1000) needZero = true;
+      for (let k = 0; k < 4; k++) {
+        const d = +ds[k]; const u = units[3 - k];
+        if (d === 0) { if (gs) z = true; continue; }
+        if (z) { gs += '零'; z = false; }
+        gs += DIG[d] + u;
+      }
+      out += (needZero && out ? '零' : '') + gs + bigs[gi]; needZero = false;
+    }
+    return out.replace(/^一十/, '十');
+  }
+  function numToZh(text) {
+    return text
+      .replace(/(\d+(?:\.\d+)?)%/g, (_, a) => '百分之' + decToZh(a))
+      .replace(/(\d{4})(?=年)/g, (_, a) => [...a].map(d => DIG[d]).join(''))
+      .replace(/\d+(?:\.\d+)?/g, decToZh);
+    function decToZh(a) { const [i, f] = a.split('.'); return intToZh(i) + (f ? '点' + [...f].map(d => DIG[d]).join('') : ''); }
+  }
+
+  /* ---------- punctuation (misaki map_punctuation) ---------- */
+  function mapPunc(t) {
+    return t.replace(/、|，/g, ', ').replace(/。|．/g, '. ').replace(/！/g, '! ').replace(/：/g, ': ')
+      .replace(/；/g, '; ').replace(/？/g, '? ').replace(/[«《「『【“]/g, ' “').replace(/[»》」』】”]/g, '” ')
+      .replace(/（/g, ' (').replace(/）/g, ') ').replace(/[—]{1,}|──|--/g, '—').replace(/…+|\.{3,}|。{2,}/g, '…')
+      .replace(/~|～/g, ', ').trim();
+  }
+
+  /* ---------- pinyin syllable → [initial, strict final] ---------- */
+  function splitPy(py) {
+    let tone = py.match(/(\d)$/); tone = tone ? tone[1] : '5'; if (tone === '0') tone = '5';
+    let s = py.replace(/\d$/, '').replace(/ü/g, 'v').replace(/ê/g, 'e');
+    if (s === 'n' || s === 'ng' || s === 'm') return ['', 'en', tone]; /* 嗯 */
+    let ini = INITIALS.find(i => s.startsWith(i)) || '';
+    let fin = s.slice(ini.length);
+    if (!ini) {
+      if (s[0] === 'y') { fin = s.startsWith('yu') ? 'v' + s.slice(2) : s.startsWith('yi') ? 'i' + s.slice(2) : 'i' + s.slice(1); }
+      else if (s[0] === 'w') { fin = s.startsWith('wu') ? 'u' + s.slice(2) : 'u' + s.slice(1); }
+    }
+    if ('jqx'.includes(ini) && ini && fin[0] === 'u') fin = 'v' + fin.slice(1);
+    if (fin === 'iu') fin = 'iou'; else if (fin === 'ui') fin = 'uei'; else if (fin === 'un') fin = 'uen';
+    if (fin === 'i' && 'zcs'.includes(ini) && ini.length === 1) fin = 'ii';
+    else if (fin === 'i' && ['zh', 'ch', 'sh', 'r'].includes(ini)) fin = 'iii';
+    if (fin === 'ue' && !ini) fin = 've';
+    return [ini, fin, tone];
+  }
+
+  /* ---------- word segmentation ---------- */
+  const SEG = (typeof Intl !== 'undefined' && Intl.Segmenter) ? new Intl.Segmenter('zh', { granularity: 'word' }) : null;
+  const HAN = /[㐀-鿿]/;
+  function words(t) {
+    if (SEG) return [...SEG.segment(t)].map(x => x.segment);
+    return t.match(/[㐀-鿿]|[^㐀-鿿]/g) || [];
+  }
+
+  /* ---------- G2P ---------- */
+  function g2p(text) {
+    text = mapPunc(numToZh(text)).replace(/[A-Za-z]+/g, ' ');
+    const raw = words(text);
+    /* merge a lone 儿 into the preceding Chinese word (erhua candidate) */
+    const ws = [];
+    for (const w of raw) {
+      if (w === '儿' && ws.length && HAN.test(ws[ws.length - 1]) && !NOT_ERHUA.has(ws[ws.length - 1].slice(-1) + '儿')) ws[ws.length - 1] += w;
+      else ws.push(w);
+    }
+    const pys = pinyinPro.pinyin(ws.join(''), { toneType: 'num', type: 'array', nonZh: 'removed' });
+    let pi = 0; const items = [];
+    for (const w of ws) {
+      if (!HAN.test(w)) {
+        for (const ch of w) {
+          if (PUNC.has(ch)) items.push(ch);
+          else if (/\s/.test(ch)) items.push(' ');
+        }
+        continue;
+      }
+      const chars = [...w].filter(c => HAN.test(c));
+      const syl = chars.map(() => splitPy(pys[pi++] || 'a5'));
+      for (let k = syl.length - 2; k >= 0; k--) if (syl[k][2] === '3' && syl[k + 1][2] === '3') syl[k][2] = '2';
+      const last = syl[syl.length - 1];
+      if (chars.length > 1 && chars[chars.length - 1] === '儿' && last[1] === 'er' && (last[2] === '2' || last[2] === '5') && !NOT_ERHUA.has(w.slice(-2)) && !NOT_ERHUA.has(w)) {
+        syl.pop(); syl[syl.length - 1][1] += 'R';
+      }
+      items.push(syl);
+    }
+    /* 3-3 sandhi across adjacent words when one of them is a single syllable */
+    for (let k = 0; k + 1 < items.length; k++) {
+      const x = items[k], y = items[k + 1];
+      if (Array.isArray(x) && Array.isArray(y) && (x.length === 1 || y.length === 1) && x[x.length - 1][2] === '3' && y[0][2] === '3') x[x.length - 1][2] = '2';
+    }
+    const out = []; let prevWord = false;
+    for (const it of items) {
+      if (!Array.isArray(it)) { if (it === ' ') { if (out.length && out[out.length - 1] !== ' ') out.push(' '); } else out.push(it); prevWord = false; continue; }
+      let ph = '';
+      for (const [ini, fin, tone] of it) {
+        if (ini) ph += ZH_MAP[ini] || '';
+        const r = fin.endsWith('R'); const f = r ? fin.slice(0, -1) : fin;
+        ph += (ZH_MAP[f] || '') + (r ? 'R' : '') + tone;
+      }
+      if (prevWord) out.push('/');
+      out.push(ph); prevWord = true;
+    }
+    return out.join('').replace(/\s+/g, ' ').trim();
+  }
+  function tokenize(ph) { const ids = []; for (const c of ph) { const id = VOCAB.get(c); if (id !== undefined) ids.push(id); } return ids; }
+
+  /* ---------- model ---------- */
+  let session = null, loading = null; const voiceCache = new Map();
+  async function cachedFetch(url, onProgress) {
+    let cache = null; try { cache = await caches.open(CACHE); } catch (e) {}
+    if (cache) { const hit = await cache.match(url); if (hit) { onProgress && onProgress(1, true); return new Uint8Array(await hit.arrayBuffer()); } }
+    const res = await fetch(url); if (!res.ok) throw new Error('下载失败 ' + res.status);
+    const total = +res.headers.get('content-length') || 0;
+    const reader = res.body.getReader(); const parts = []; let got = 0;
+    for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); got += value.length; onProgress && total && onProgress(got / total, false); }
+    const buf = new Uint8Array(got); let o = 0; for (const p of parts) { buf.set(p, o); o += p.length; }
+    if (cache) { try { await cache.put(url, new Response(buf, { headers: { 'content-type': 'application/octet-stream' } })); } catch (e) {} }
+    return buf;
+  }
+  const F16 = 'https://huggingface.co/hsc666/Kokoro-82M-v1.1-zh-ONNX-webgpu/resolve/main/onnx/model_fp16.onnx';
+  let plan = null;
+  async function pickPlan() {
+    if (plan) return plan;
+    const o = self.KOKORO_OPTS || {};
+    if (o.model) return plan = { url: o.model.startsWith('http') ? o.model : REPO + o.model, ep: o.ep || ['wasm'], mb: 0, gpu: (o.ep || [])[0] === 'webgpu' };
+    let ad = null; try { ad = navigator.gpu && await navigator.gpu.requestAdapter(); } catch (e) {}
+    if (ad && ad.features && ad.features.has('shader-f16')) return plan = { url: F16, ep: ['webgpu', 'wasm'], mb: 177, gpu: true };
+    if (ad) return plan = { url: REPO + 'onnx/model.onnx', ep: ['webgpu', 'wasm'], mb: 339, gpu: true };
+    return plan = { url: MODEL, ep: ['wasm'], mb: 127, gpu: false };
+  }
+  async function isCached() { const p = await pickPlan(); try { const c = await caches.open(CACHE); return !!(await c.match(p.url)); } catch (e) { return false; } }
+  function init(onProgress) {
+    if (session) return Promise.resolve();
+    if (loading) return loading;
+    loading = (async () => {
+      const o = self.KOKORO_OPTS || {};
+      const p = await pickPlan();
+      ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/';
+      ort.env.wasm.numThreads = o.threads || (self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1);
+      const bytes = await cachedFetch(p.url, onProgress);
+      try { session = await ort.InferenceSession.create(bytes, { executionProviders: p.ep, graphOptimizationLevel: 'all' }); }
+      catch (e) { if (p.gpu) { session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] }); p.gpu = false; } else throw e; }
+    })();
+    loading.catch(() => { loading = null; });
+    return loading;
+  }
+  async function voice(name) {
+    if (voiceCache.has(name)) return voiceCache.get(name);
+    const b = await cachedFetch(REPO + 'voices/' + name + '.bin');
+    const f = new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
+    voiceCache.set(name, f); return f;
+  }
+  /* one call ≤ 510 tokens; returns Float32Array at 24 kHz */
+  async function synth(text, voiceName, speed = 1) {
+    await init();
+    const ph = g2p(text); let ids = tokenize(ph);
+    if (!ids.length) return new Float32Array(0);
+    if (ids.length > 508) ids = ids.slice(0, 508);
+    const v = await voice(voiceName);
+    const n = ids.length; const style = v.slice(n * 256, n * 256 + 256);
+    const input = new BigInt64Array(n + 2); ids.forEach((id, i) => input[i + 1] = BigInt(id));
+    const feeds = {
+      input_ids: new ort.Tensor('int64', input, [1, n + 2]),
+      style: new ort.Tensor('float32', style, [1, 256]),
+      speed: new ort.Tensor('float32', new Float32Array([speed]), [1]),
+    };
+    const out = await session.run(feeds);
+    return out.waveform.data;
+  }
+  const MALE = ['zm_009','zm_010','zm_011','zm_012','zm_013','zm_014','zm_015','zm_016','zm_020','zm_025','zm_029','zm_030','zm_031','zm_033','zm_034','zm_035','zm_037','zm_041','zm_045','zm_050','zm_052','zm_053','zm_054','zm_055','zm_056','zm_057','zm_058','zm_061','zm_062','zm_063','zm_064','zm_065','zm_066','zm_068','zm_069','zm_080','zm_081','zm_082','zm_089','zm_091','zm_095','zm_096','zm_097','zm_098','zm_100'];
+  const FEMALE = ['zf_001','zf_002','zf_003','zf_004','zf_005','zf_006','zf_007','zf_008','zf_017','zf_018','zf_019','zf_021','zf_022','zf_023','zf_024','zf_026','zf_027','zf_028','zf_032','zf_036','zf_038','zf_039','zf_040','zf_042','zf_043','zf_044','zf_046','zf_047','zf_048','zf_049','zf_051','zf_059','zf_060','zf_067','zf_070','zf_071','zf_072','zf_073','zf_074','zf_075','zf_076','zf_077','zf_078','zf_079','zf_083','zf_084','zf_085','zf_086','zf_087','zf_088','zf_090','zf_092','zf_093','zf_094','zf_099'];
+  return { init, synth, g2p, isCached, pickPlan, SR, MALE, FEMALE, get ready() { return !!session; } };
+})();
+
+(() => {
+  const $ = s => document.querySelector(s);
+  const FKEY = 'kokoro-favs';
+  let favs = []; try { favs = JSON.parse(localStorage.getItem(FKEY) || '[]'); } catch (e) {}
+  let tab = 'M', ctx = null, src = null, busy = null, gen = 0;
+  const label = id => (id.startsWith('zm') ? '男 ' : '女 ') + id.slice(3);
+  const play = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5l7 4.5-7 4.5z" fill="currentColor"/></svg>';
+  const stopI = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1" fill="currentColor"/></svg>';
+
+  function renderGrid() {
+    const list = tab === 'M' ? KokoroZh.MALE : KokoroZh.FEMALE;
+    $('#grid').innerHTML = list.map(id => `<div class="v${busy === id ? ' on' : ''}" data-id="${id}">
+      <button class="play" aria-label="试听 ${label(id)}">${busy === id ? stopI : play}<span>${label(id)}</span></button>
+      <button class="st" aria-pressed="${favs.includes(id)}" aria-label="收藏 ${label(id)}">${favs.includes(id) ? '★' : '☆'}</button></div>`).join('');
+  }
+  function renderFav() {
+    $('#fav').innerHTML = favs.length ? favs.map(id => `<span class="chip">${label(id)}</span>`).join('') : '<span class="muted">还没有收藏</span>';
+    $('#copyBtn').disabled = !favs.length;
+    try { localStorage.setItem(FKEY, JSON.stringify(favs)); } catch (e) {}
+  }
+  $('#tabM').onclick = () => { tab = 'M'; $('#tabM').setAttribute('aria-selected', 'true'); $('#tabF').setAttribute('aria-selected', 'false'); renderGrid(); };
+  $('#tabF').onclick = () => { tab = 'F'; $('#tabF').setAttribute('aria-selected', 'true'); $('#tabM').setAttribute('aria-selected', 'false'); renderGrid(); };
+  $('#speed').oninput = e => $('#speedOut').textContent = (+e.target.value).toFixed(2) + '×';
+  $('#copyBtn').onclick = async () => {
+    const t = '我喜欢的 Kokoro 声音：' + favs.join('、');
+    try { await navigator.clipboard.writeText(t); $('#copyBtn').textContent = '已复制'; setTimeout(() => $('#copyBtn').textContent = '复制收藏列表', 1500); }
+    catch (e) { prompt('复制这段文字：', t); }
+  };
+
+  function stop() { gen++; try { src && src.stop(); } catch (e) {} src = null; busy = null; renderGrid(); }
+  async function audition(id) {
+    if (busy === id) { stop(); return; }
+    stop(); const g = ++gen; busy = id; renderGrid();
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: KokoroZh.SR });
+    if (ctx.state === 'suspended') ctx.resume();
+    try {
+      if (!KokoroZh.ready) await load();
+      $('#status').textContent = '正在生成 ' + label(id) + '…';
+      const t0 = performance.now();
+      const text = $('#text').value.trim().slice(0, 160) || '你好。';
+      const audio = await KokoroZh.synth(text, id, +$('#speed').value);
+      if (g !== gen) return;
+      const secs = audio.length / KokoroZh.SR;
+      $('#status').textContent = `${label(id)} · 生成用了 ${((performance.now() - t0) / 1000).toFixed(1)} 秒，音频 ${secs.toFixed(1)} 秒`;
+      const buf = ctx.createBuffer(1, audio.length, KokoroZh.SR); buf.copyToChannel(audio, 0);
+      src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination);
+      src.onended = () => { if (g === gen) { busy = null; renderGrid(); } };
+      src.start();
+    } catch (e) { if (g === gen) { $('#status').textContent = '出错了：' + (e && e.message || e); busy = null; renderGrid(); } }
+  }
+  $('#grid').addEventListener('click', e => {
+    const v = e.target.closest('.v'); if (!v) return; const id = v.dataset.id;
+    if (e.target.closest('.st')) { favs = favs.includes(id) ? favs.filter(x => x !== id) : [...favs, id]; renderFav(); renderGrid(); return; }
+    audition(id);
+  });
+
+  let loadP = null;
+  function load() {
+    if (loadP) return loadP;
+    $('#loadBtn').disabled = true; $('#loadMsg').textContent = '正在下载模型…';
+    loadP = KokoroZh.init((p, hit) => {
+      $('#barFill').style.width = (p * 100).toFixed(1) + '%';
+      $('#loadMsg').textContent = hit ? '从本机缓存读取模型…' : `正在下载模型 ${(p * 100).toFixed(0)}%（只需下载一次）`;
+    }).then(() => {
+      $('#barFill').style.width = '100%'; $('#loadBtn').textContent = '模型已就绪';
+      $('#loadMsg').textContent = '已就绪，点下面任意一个声音试听。第一次生成会稍慢一点。';
+    }, e => { loadP = null; $('#loadBtn').disabled = false; $('#loadMsg').textContent = '加载失败：' + (e && e.message || e) + '，请检查网络后重试'; throw e; });
+    return loadP;
+  }
+  $('#loadBtn').onclick = () => load().catch(() => {});
+
+  (async () => {
+    const p = await KokoroZh.pickPlan(); const cached = await KokoroZh.isCached();
+    $('#loadMsg').textContent = (p.gpu ? '这台设备支持显卡加速，生成会很快。' : '这台设备不支持显卡加速，生成会比较慢（适合试听，不太适合长时间朗读）。')
+      + (cached ? '模型已经在本机，点按钮即可。' : `第一次需要下载约 ${p.mb} MB。`);
+    if (cached) load().catch(() => {});
+  })();
+  renderGrid(); renderFav();
+})();
+</script>
+</body>
+</html>
